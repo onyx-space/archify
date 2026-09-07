@@ -12,6 +12,30 @@ const skillRoot = path.resolve(__dirname, '..');
 
 const TYPES = new Set(['architecture', 'workflow', 'sequence', 'dataflow', 'lifecycle']);
 
+function getVersion() {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(skillRoot, 'package.json'), 'utf8'));
+    return pkg.version || '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
+
+const HOME_VIEW = `Create self-contained, interactive HTML diagrams from typed JSON specs.
+
+archify[16]{type,command,description}:
+  architecture,render,"render a component/service infrastructure map"
+  workflow,render,"process, approval gate, runbook, CI/CD"
+  sequence,render,"API call chain, request lifecycle, async trace"
+  dataflow,render,"pipeline, ETL/ELT, lineage, governance"
+  lifecycle,render,"state/status transition, retry, terminal state"
+
+help[3]:
+  Run \`archify validate <type> <input.json> --quality showcase\` to check a candidate
+  Run \`archify guide "<scenario>" --json\` to pick the right diagram type
+  Run \`archify doctor\` to verify the install
+`;
+
 function usage() {
   return `Usage:
   archify render <type> <input.json> [output.html] [--quality standard|showcase] [--repo-root path (architecture only)]
@@ -2024,9 +2048,18 @@ function commandValidate(args) {
 
 const [command, ...args] = process.argv.slice(2);
 
+// AXI: fast version probe before any heavy work. -v, -V, --version -> bare version, exit 0.
+if (command === '--version' || command === '-v' || command === '-V') {
+  console.log(getVersion());
+  process.exit(0);
+}
+
 try {
   switch (command) {
     case undefined:
+      // AXI content-first: no-args shows live state + next steps, not a usage manual.
+      console.log(HOME_VIEW);
+      break;
     case '-h':
     case '--help':
     case 'help':
@@ -2078,7 +2111,10 @@ try {
       commandDemo(args);
       break;
     default:
-      fail(`Unknown command "${command}".\n\n${usage()}`);
+      // AXI: fail loud on unknown command with self-correcting help (exit 2).
+      console.error(`error: Unknown command \`${command}\``);
+      console.error('help: Run `archify --help` to list commands.');
+      process.exitCode = 2;
   }
 } catch (error) {
   if (!error.archifyArgument) throw error;
