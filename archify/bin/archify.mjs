@@ -736,9 +736,7 @@ async function commandCompare(args) {
     commitComparePair({ htmlCandidate, receiptCandidate, outputPath, receiptPath, stagingDirectory });
     if (options.json) console.log(JSON.stringify(finalReceipt, null, 2));
     else {
-      console.log(`compared architecture ${outputPath}`);
-      console.log(`${finalReceipt.validation.checksPassed}/${finalReceipt.validation.checkCount} checks; completeness ${finalReceipt.completeness}; ${finalReceipt.proofLevel}; sha256 ${finalReceipt.artifact.sha256.slice(0, 12)}`);
-      console.log(`receipt ${receiptPath}`);
+      console.log(`compare:\n  output: ${outputPath}\n  checks: ${finalReceipt.validation.checksPassed}/${finalReceipt.validation.checkCount}\n  completeness: ${finalReceipt.completeness}\n  proof: ${finalReceipt.proofLevel}\n  sha256: ${finalReceipt.artifact.sha256.slice(0, 12)}\n  receipt: ${receiptPath}`);
     }
   } catch (error) {
     if (error instanceof ArchitectureDeltaError) {
@@ -1198,12 +1196,11 @@ async function commandDeliver(args) {
     if (json) {
       console.log(JSON.stringify(receipt, null, 2));
     } else {
-      console.log(`delivered ${type} ${outputPath}`);
       const engineering = receipt.validation.engineeringProfile
-        ? `; engineering ${receipt.validation.engineeringProfile}: pass`
+        ? `\n  engineering: pass`
         : '';
-      console.log(`${receipt.validation.checksPassed}/${receipt.validation.checkCount} artifact checks; composition ${receipt.validation.compositionProfile}: ${receipt.validation.compositionStatus}${engineering}; sha256 ${receipt.artifact.sha256.slice(0, 12)}`);
-      if (receipt.open?.status === 'opened') console.log(`opened ${outputPath}`);
+      console.log(`delivery:\n  type: ${type}\n  output: ${outputPath}\n  checks: ${receipt.validation.checksPassed}/${receipt.validation.checkCount}\n  profile: ${receipt.validation.compositionProfile}\n  status: ${receipt.validation.compositionStatus}${engineering}\n  sha256: ${receipt.artifact.sha256.slice(0, 12)}`);
+      if (receipt.open?.status === 'opened') console.log(`  opened: true`);
     }
   } finally {
     try {
@@ -1296,7 +1293,8 @@ async function commandVisualCheck(args) {
     console.log(JSON.stringify(result.receipt, null, 2));
   } else {
     console.log(`automated browser evidence ${result.receipt.status}: ${result.receipt.artifact.path}`);
-    console.log(`visual-check containment ${result.receipt.containment.status}; captures ${result.receipt.captures.status}; perceptual visual review pending`);
+    console.log(`visual-check containment ${result.receipt.containment.status}; captures ${result.receipt.captures.status}`);
+    console.log('perceptual visual review pending');
     console.log(`receipt ${path.join(path.dirname(result.receipt.artifact.path), result.receipt.sidecars.receipt)}`);
     if (result.receipt.captures.contactSheet) {
       console.log(`contact sheet ${path.join(path.dirname(result.receipt.artifact.path), result.receipt.captures.contactSheet)}`);
@@ -1428,16 +1426,16 @@ async function commandDoctor() {
     });
   }
 
-  console.log('Archify doctor\n');
+  console.log(`doctor[${checks.length}]{status,label}:`);
   for (const check of checks) {
-    console.log(`[${check.ok ? 'ok' : (check.failureLabel || 'missing')}] ${check.label}`);
+    console.log(`  ${check.ok ? 'ok' : (check.failureLabel || 'missing')},${check.label}`);
   }
 
   const nodeFailed = checks[0].ok ? 0 : 1;
   const missingFiles = checks.reduce((count, check) => count + check.missing, 0);
   const invalidRuntime = checks.reduce((count, check) => count + (check.invalid || 0), 0);
   if (nodeFailed === 0 && missingFiles === 0 && invalidRuntime === 0) {
-    console.log('\nArchify is ready.');
+    console.log('status: ready');
     return;
   }
 
@@ -1574,9 +1572,8 @@ function commandDemo(args) {
   const result = runNode([rendererPath('architecture'), input, output]);
   if (result.status !== 0) exitFrom(result);
 
-  console.log(`\nDemo ready: ${output}`);
-  console.log('Next: open the HTML in your browser, then render your own diagram:');
-  console.log('  archify render architecture <input.json> <output.html>');
+  console.log(`demo:\n  output: ${output}\n  next: open the HTML in a browser, then render your own diagram`);
+  console.log('  run: archify render architecture <input.json> <output.html>');
 }
 
 function migrationPathDiagnostics(error, sourcePath, destinationPath) {
@@ -1881,9 +1878,9 @@ async function commandMigrate(args) {
     });
     if (options.json) console.log(JSON.stringify(report, null, 2));
     else if (sourceDocument.schema_version === 1) {
-      console.log(`migrated workflow schema v1→v2: ${sourcePath} → ${destinationPath}`);
+      console.log(`migration:\n  operation: migrate\n  from: ${sourcePath}\n  to: ${destinationPath}\n  schema: v1→v2`);
     } else {
-      console.log(`verified workflow schema v2 migration: ${sourcePath} → ${destinationPath}`);
+      console.log(`migration:\n  operation: verify\n  from: ${sourcePath}\n  to: ${destinationPath}\n  schema: v2`);
     }
   } catch (error) {
     const migrationDiagnostics = Array.isArray(error?.archifyDiagnostics)
@@ -2033,9 +2030,9 @@ function commandValidate(args) {
           }, null, 2));
         } else {
           const engineering = engineeringProfile
-            ? `; engineering ${engineeringProfile}: pass`
+            ? `\n  engineering: pass`
             : '';
-          console.log(`ok ${type} ${path.resolve(input)} (${result.checks.length} artifact checks; composition ${result.composition.profile}: ${result.composition.summary.errors} errors, ${result.composition.summary.warnings} warnings${engineering})`);
+          console.log(`validation:\n  type: ${type}\n  input: ${path.resolve(input)}\n  checks: ${result.checks.length}/${result.checks.length}\n  profile: ${result.composition.profile}\n  errors: ${result.composition.summary.errors}\n  warnings: ${result.composition.summary.warnings}${engineering}`);
         }
       }
     }

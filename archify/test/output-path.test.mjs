@@ -583,5 +583,5 @@ test('doctor reports a missing output-path safety runtime in an installed skill'
   });
 
   assert.equal(result.status, 1);
-  assert.match(result.stdout, /\[missing\] Output path safety runtime/);
+  assert.match(result.stdout, /missing,Output path safety runtime/);
 });
