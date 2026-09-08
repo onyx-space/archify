@@ -38,10 +38,24 @@ function gitValue(repoRoot, args, failure) {
   return result.stdout.trim();
 }
 
-function githubSlug(value) {
+function repoSlug(value) {
   const raw = String(value || '').trim();
-  const match = raw.match(/^(?:https:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/i);
-  return match ? `${match[1]}/${match[2]}`.toLowerCase() : null;
+  // 支持任意 git 主机（github / gitea / gitlab 等），host 允许带端口：
+  //   https://HOST[:port]/owner/repo[.git]
+  //   git@HOST:owner/repo[.git]  |  ssh://git@HOST/owner/repo[.git]
+  const match = raw.match(/^(?:https?:\/\/|git@|ssh:\/\/git@)([^/\s]+?)(?:[:/])([^/\s:]+)\/([^/\s]+?)(?:\.git)?\/?$/i);
+  if (!match) return null;
+  const host = match[1].toLowerCase();
+  const owner = match[2];
+  const repo = match[3];
+  if (!owner || !repo) return null;
+  return { host, slug: `${owner}/${repo}`.toLowerCase() };
+}
+
+// 兼容旧版调用：返回 slug 字符串（用于 origin 对账比较）
+function slugOf(value) {
+  const parsed = repoSlug(value);
+  return parsed ? parsed.slug : null;
 }
 
 function verifiedSourcePath(value, where) {
@@ -103,12 +117,19 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
       supportedFixes: ['pin one full 40-character commit SHA'],
     });
   }
-  const authoredSlug = githubSlug(repository.url);
-  if (!authoredSlug || !String(repository.url).startsWith('https://github.com/')) {
-    evidenceFailure('repository-evidence/url-invalid', '/meta/repository/url must be a public https://github.com owner/repository URL.', {
+  const authoredSlug = repoSlug(repository.url);
+  if (!String(repository.url).match(/^https?:\/\//)) {
+    evidenceFailure('repository-evidence/url-invalid', '/meta/repository/url must be a public http(s) git repository URL.', {
       subject: { path: '/meta/repository/url' },
       evidence: { repositoryUrl: repository.url },
-      supportedFixes: ['use the canonical public GitHub HTTPS repository URL'],
+      supportedFixes: ['use the canonical public git repository URL (github/gitea/gitlab)'],
+    });
+  }
+  if (!authoredSlug) {
+    evidenceFailure('repository-evidence/url-invalid', '/meta/repository/url must contain an owner/repository path.', {
+      subject: { path: '/meta/repository/url' },
+      evidence: { repositoryUrl: repository.url },
+      supportedFixes: ['use the canonical public git repository URL (owner/repository)'],
     });
   }
   if (!repoRootInput) {
@@ -138,7 +159,7 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
     });
   }
   const origin = gitValue(realRoot, ['remote', 'get-url', 'origin'], 'Evidence repository must have an origin remote.');
-  if (githubSlug(origin) !== authoredSlug) {
+  if (slugOf(origin) !== authoredSlug) {
     evidenceFailure('repository-evidence/origin-mismatch', `Evidence repository origin ${JSON.stringify(origin)} does not match ${JSON.stringify(repository.url)}.`, {
       subject: { repoRoot: realRoot },
       evidence: { localOrigin: origin, authoredRepository: repository.url },
