@@ -117,7 +117,7 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
       supportedFixes: ['pin one full 40-character commit SHA'],
     });
   }
-  const authoredSlug = repoSlug(repository.url);
+  const authoredSlug = repoSlug(repository.url)?.slug ?? null;
   if (!String(repository.url).match(/^https?:\/\//)) {
     evidenceFailure('repository-evidence/url-invalid', '/meta/repository/url must be a public http(s) git repository URL.', {
       subject: { path: '/meta/repository/url' },
