@@ -99,16 +99,16 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
   }
   const linkMode = repository.link_mode ?? 'web';
   if (!['web', 'local-only'].includes(linkMode)) evidenceFailure('repository-evidence/link-mode-invalid', 'Repository link_mode must be web or local-only.');
-  if (repository.provider !== undefined && (!['github', 'gitee'].includes(repository.provider) || repository.provider !== location.provider)) {
-    evidenceFailure('repository-evidence/provider-invalid', 'Repository provider must match its supported public host (github.com or gitee.com).', {
+  if (repository.provider !== undefined && location.provider !== null && repository.provider !== location.provider) {
+    evidenceFailure('repository-evidence/provider-invalid', 'Repository provider must match the host it names.', {
       subject: { path: '/meta/repository/provider' },
-      supportedFixes: ['use the matching provider or omit provider and select link_mode: local-only'],
+      supportedFixes: ['use the provider matching the repository host, or omit provider'],
     });
   }
-  if (linkMode === 'web' && (!location.provider || location.protocol !== 'https:' || location.endpoint !== 'standard' || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(location.path))) {
-    evidenceFailure('repository-evidence/links-unsupported', 'Web source links require a canonical GitHub or Gitee HTTPS owner/repository URL.', {
+  if (linkMode === 'web' && (location.protocol !== 'https:' || (location.provider !== null && location.endpoint !== 'standard') || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(location.path))) {
+    evidenceFailure('repository-evidence/links-unsupported', 'Web source links require an HTTPS owner/repository URL.', {
       subject: { path: '/meta/repository/url' },
-      supportedFixes: ['use a canonical GitHub or Gitee URL, or select link_mode: local-only to retain local verification without web links'],
+      supportedFixes: ['use an HTTPS owner/repository URL, or select link_mode: local-only to retain local verification without web links'],
     });
   }
   if (!repoRootInput) {

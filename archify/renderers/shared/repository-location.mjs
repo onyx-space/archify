@@ -52,7 +52,7 @@ export function redactRepositoryRemote(value) {
 export function repositorySourceHref(provider, url, revision, source) {
   const encodedPath = source.path.split('/').map(encodeURIComponent).join('/');
   const end = source.endLine && source.endLine !== source.line
-    ? `-${provider === 'github' ? 'L' : ''}${source.endLine}` : '';
+    ? `-${provider === 'gitee' ? '' : 'L'}${source.endLine}` : '';
   const fragment = source.line ? `#L${source.line}${end}` : '';
   return `${url}/blob/${revision}/${encodedPath}${fragment}`;
 }

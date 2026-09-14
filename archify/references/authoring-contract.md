@@ -194,10 +194,12 @@ blob, and valid line range are required in every link mode. Verification is
 local and makes no remote requests; it establishes neither public availability
 nor the current reader's access rights.
 
-`link_mode` defaults to `web`. GitHub and Gitee HTTPS repository URLs generate
-revision-pinned links; their public hosts select the provider automatically.
-Optional `provider: "github"` or `"gitee"` must agree with the host. Existing
-GitHub declarations and default delivery receipt fields remain compatible.
+`link_mode` defaults to `web`. HTTPS repository URLs with an `owner/repository`
+path generate revision-pinned links, including self-hosted forges such as Gitea
+or GitLab. `github.com` and `gitee.com` select the provider automatically, and
+an optional `provider` must agree with those recognized hosts; on any other host
+`provider` is free-form metadata. Existing GitHub declarations and default
+delivery receipt fields remain compatible.
 
 ```json
 {
@@ -207,7 +209,8 @@ GitHub declarations and default delivery receipt fields remain compatible.
 }
 ```
 
-For an internal or unsupported forge, select `link_mode: "local-only"`. The
+For a repository that cannot publish web links (an HTTP or SSH-only address, a
+nested namespace, or an internal-only host), select `link_mode: "local-only"`. The
 Viewer retains SRC markers, searchable file paths, line ranges, and revision
 labels without repository or source hyperlinks. The evidence receipt adds
 `linkMode: "local-only"`. `url` remains required as the expected origin identity;
@@ -234,9 +237,10 @@ match. For example, `git@host:Team/repo` differs from
 `ssh://git@host/Team/repo`; `git@host:/Team/repo` matches the latter. SCP-style
 paths preserve literal percent escapes, while URI paths decode them. SSH host
 aliases and forge-specific browse/clone prefixes are not guessed.
-GitLab/Gitea/Forgejo/Bitbucket web links are not implemented in this version;
-use local-only until a tested link provider is available. Unknown web providers
-fail with a diagnostic rather than emitting a guessed link.
+Web links assume a forge browse shape like GitHub's
+`/blob/<revision>/<path>#L<start>-L<end>` and are never checked against the
+remote. Use `local-only` for HTTP or SSH addresses, nested namespaces, and any
+forge whose link shape differs.
 
 ## Hand-placed fallback
 

@@ -76,6 +76,25 @@ test('Gitee evidence generates provider-specific revision and line links', () =>
   }
 });
 
+test('self-hosted HTTPS forges generate revision-pinned source links', () => {
+  const data = fixture();
+  const url = 'https://192.168.88.19:8418/AI.Buddy/evidence-repo';
+  data.diagram.meta.repository = { url, revision: data.revision };
+  git(data.root, 'remote', 'set-url', 'origin', url);
+  fs.writeFileSync(data.input, JSON.stringify(data.diagram));
+  const validated = run(['validate', 'architecture', data.input, '--repo-root', data.root, '--json']);
+  assert.equal(validated.status, 0, validated.stderr || validated.stdout);
+  data.diagram.meta.repository.provider = 'gitea';
+  fs.writeFileSync(data.input, JSON.stringify(data.diagram));
+  const output = path.join(data.root, 'self-hosted.html');
+  const delivered = run(['deliver', 'architecture', data.input, output, '--repo-root', data.root, '--json']);
+  assert.equal(delivered.status, 0, delivered.stderr || delivered.stdout);
+  const evidence = evidencePayload(fs.readFileSync(output, 'utf8'));
+  assert.equal(evidence.repository.href, `${url}/tree/${data.revision}`);
+  assert.equal(evidence.nodes.users[0].href, `${url}/blob/${data.revision}/src/router.js#L1-L3`);
+  assert.equal(evidence.nodes.users[1].href, `${url}/blob/${data.revision}/src/store.js#L1`);
+});
+
 test('local-only evidence verifies HTTP self-hosted origins without generating links', () => {
   const data = fixture();
   data.diagram.meta.repository = {
