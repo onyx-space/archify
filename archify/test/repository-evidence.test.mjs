@@ -113,13 +113,26 @@ test('Gitee evidence generates provider-specific revision and line links', () =>
 //       is now case-insensitive; the canonical-url assertion keeps upstream's `.git` value
 //       (an intermediate flip in b98f1c8 was reverted by d294ff8).
 //   repository-evidence.test.mjs 'unsupported web providers...' -> 'unsupported web links...'
-//     upstream: exit 1 alone per case, including `{ url: 'https://git.internal/team/repo',
-//       provider: 'gitee' }`, which only passed there because self-hosted providers were accepted.
-//     fork: each case asserts its exact diagnostic code, and the self-hosted-provider case is
-//       removed because a declared provider is no longer accepted on a self-hosted host.
+//     upstream: exit 1 alone per case; `{ url: 'https://git.internal/team/repo', provider: 'gitee' }`
+//       already exited 1 there, because upstream's provider guard required the declared provider to
+//       equal the host-derived one and rejected it as repository-evidence/provider-invalid.
+//     fork: each case asserts its exact diagnostic code instead of bare exit 1. The self-hosted
+//       provider case was dropped by 08e6a48 while the relaxed guard accepted it (it then failed
+//       later as origin-mismatch); fd78d99 restored the strict guard, so the case is back with code
+//       repository-evidence/provider-invalid.
+//   cli.test.mjs 'cli: doctor ...' (3 tests) and 'cli: demo ...'
+//     upstream: /\[ok\] <label>/, /\[missing\] <label>/, /\[invalid\] <label>/, /Archify is ready\./,
+//       new RegExp(`Demo ready: <output>`), /Next: open the HTML in your browser/.
+//     fork: /\s+ok,<label>/, /\s+missing,<label>/, /\s+invalid,<label>/, /status: ready/,
+//       new RegExp(`output: <output>`), /next: open the HTML in a browser/ — reason: the restored
+//       fork TOON output (b87c0b4) replaced the bracket-prefixed doctor rows and `Demo ready` text.
+//   output-path.test.mjs 'doctor reports a missing output-path safety runtime ...'
+//     upstream: /\[missing\] Output path safety runtime/ -> fork: /missing,Output path safety runtime/
+//       (same restored doctor TOON output).
 // Fix rounds: 391e908 host-agnostic parse + self-hosted links, 4190127 http for self-hosted /
 // https for public forges, 08e6a48 exact diagnostic codes, b98f1c8 .git+case normalization and
-// the two assertion changes above, d294ff8 .git stripped in identity and emitted links.
+// the two assertion changes above, d294ff8 .git stripped in identity and emitted links, fd78d99
+// provider narrowed back to upstream's enum.
 //
 // Real internal-forge verification (CI cannot reach this host). h-machine Gitea:
 // http://192.168.1.4:3000/admin/seed-hunter, revision d2676d0b9d83fcbe5905277eb2aa7ed3b6fcd9c9
@@ -302,6 +315,7 @@ test('unsupported web links and invalid authored addresses fail without exposing
     { repository: { url: 'ssh://git@git.internal/team/repo' }, code: 'repository-evidence/links-unsupported' },
     { repository: { url: 'https://git.internal/Platform/Services/repo' }, code: 'repository-evidence/links-unsupported' },
     { repository: { url: 'https://gitee.com/team/repo', provider: 'github' }, code: 'repository-evidence/provider-invalid' },
+    { repository: { url: 'https://git.internal/team/repo', provider: 'gitee' }, code: 'repository-evidence/provider-invalid' },
     { repository: { url: 'https://user:SYNTHETIC_TOKEN@gitee.com/team/repo' }, code: 'repository-evidence/url-invalid' },
     { repository: { url: 'https://gitee.com/team/repo?token=SYNTHETIC_TOKEN' }, code: 'repository-evidence/url-invalid' },
     { repository: { url: 'https://gitee.com/team/repo#SYNTHETIC_TOKEN' }, code: 'repository-evidence/url-invalid' },
