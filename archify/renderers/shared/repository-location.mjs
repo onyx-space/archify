@@ -27,10 +27,9 @@ export function parseRepositoryRemote(value, { authored = false } = {}) {
   if (!hostname) return null;
   const provider = hostname === 'github.com' ? 'github' : hostname === 'gitee.com' ? 'gitee' : null;
   const last = segments.length - 1;
-  const suffixless = segments[last].replace(/\.git$/i, '');
-  if (!suffixless) return null;
-  if (!/\.git$/i.test(suffixless)) segments[last] = suffixless;
-  if (!segments[last] || segments[last] === '.' || segments[last] === '..') return null;
+  if (provider) segments[last] = segments[last].replace(/\.git$/i, '');
+  const undecorated = segments[last].replace(/\.git$/i, '');
+  if (!undecorated) return null;
   const repositoryPath = segments.join('/');
   // Only known forges map HTTPS and SSH to one repository namespace. Other
   // hosts retain transport, port and remote-relative/absolute path semantics.
@@ -38,7 +37,7 @@ export function parseRepositoryRemote(value, { authored = false } = {}) {
   const endpoint = provider && ((protocol === 'https:' && port === '443') || (protocol === 'ssh:' && port === '22'))
     ? 'standard' : `${protocol}${port}`;
   const pathKind = provider ? 'repository' : scp && !scpAbsolute ? 'relative' : 'absolute';
-  const identityPath = repositoryPath.toLowerCase();
+  const identityPath = (provider ? repositoryPath : [...segments.slice(0, last), undecorated].join('/')).toLowerCase();
   const encodedPath = segments.map(encodeURIComponent).join('/');
   const canonicalUrl = scp ? `git@${hostname}:${scpAbsolute ? '/' : ''}${repositoryPath}`
     : `${protocol}//${protocol === 'ssh:' ? 'git@' : ''}${url.host}/${encodedPath}`;

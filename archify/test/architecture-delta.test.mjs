@@ -274,7 +274,7 @@ test('portable compare retains link settings and uses the same repository identi
   head.meta.repository = { url: 'https://git.internal:443/Team/Services/repo.git', revision: 'b'.repeat(40), link_mode: 'local-only' };
   const canonical = JSON.parse(canonicalArchitectureJson(base));
   assert.equal(canonical.meta.repository.link_mode, 'local-only');
-  assert.equal(canonical.meta.repository.url, 'https://git.internal/Team/Services/repo');
+  assert.equal(canonical.meta.repository.url, 'https://git.internal/Team/Services/repo.git');
   assert.equal(compareArchitecture(base, head, { baseVerified: true, headVerified: true }).proofLevel, 'revision-pinned');
   head.meta.repository.url = 'https://git.internal/team/Services/repo.git';
   assert.equal(compareArchitecture(base, head, { baseVerified: true, headVerified: true }).proofLevel, 'revision-pinned');

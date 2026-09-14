@@ -152,6 +152,7 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
   }
 
   const revision = repository.revision.toLowerCase();
+  const linkUrl = location.url.replace(/\.git$/i, '');
   const commit = runGit(realRoot, ['cat-file', '-e', `${revision}^{commit}`]);
   if (commit.status !== 0) {
     evidenceFailure('repository-evidence/revision-unavailable', `Evidence revision ${revision} is not available in the local repository.`, {
@@ -214,7 +215,7 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
           });
         }
       }
-      verified.push({ ...source, ...(linkMode === 'web' ? { href: repositorySourceHref(location.provider, location.url, revision, source) } : {}) });
+      verified.push({ ...source, ...(linkMode === 'web' ? { href: repositorySourceHref(location.provider, linkUrl, revision, source) } : {}) });
       referenceCount += 1;
     }
     nodes[component.id] = verified;
@@ -230,11 +231,11 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
     schemaVersion: 1,
     verified: true,
     repository: {
-      url: location.url,
+      url: linkUrl,
       revision,
       shortRevision: revision.slice(0, 7),
-      label: location.provider === 'github' ? location.path : location.url.replace(/^(?:https?:\/\/|ssh:\/\/git@|git@)/, ''),
-      ...(linkMode === 'web' ? { href: `${location.url}/tree/${revision}` } : { linkMode }),
+      label: location.provider === 'github' ? location.path : linkUrl.replace(/^(?:https?:\/\/|ssh:\/\/git@|git@)/, ''),
+      ...(linkMode === 'web' ? { href: `${linkUrl}/tree/${revision}` } : { linkMode }),
     },
     referenceCount,
     nodes,
