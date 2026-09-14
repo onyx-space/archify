@@ -237,25 +237,26 @@ test('local-only preserves root, origin, commit, blob, path and line checks', ()
   assert.match(result.stdout, /must have an origin/);
 });
 
-test('unsupported web providers and invalid authored addresses fail without exposing credentials', () => {
+test('unsupported web links and invalid authored addresses fail without exposing credentials', () => {
   const data = fixture();
-  for (const repository of [
-    { url: 'https://git.internal/team/repo' },
-    { url: 'https://gitee.com/team/repo', provider: 'github' },
-    { url: 'https://git.internal/team/repo', provider: 'gitee' },
-    { url: 'https://user:SYNTHETIC_TOKEN@gitee.com/team/repo' },
-    { url: 'https://gitee.com/team/repo?token=SYNTHETIC_TOKEN' },
-    { url: 'https://gitee.com/team/repo#SYNTHETIC_TOKEN' },
-    { url: 'https://gitee.com/team/%2e%2e/repo' },
-    { url: 'https://gitee.com/team%2Frepo' },
-    { url: 'file:///tmp/repo', link_mode: 'local-only' },
-    { url: 'javascript:alert(1)', link_mode: 'local-only' },
-    { link_mode: 'local-only' },
+  for (const { repository, code } of [
+    { repository: { url: 'ssh://git@git.internal/team/repo' }, code: 'repository-evidence/links-unsupported' },
+    { repository: { url: 'https://git.internal/Platform/Services/repo' }, code: 'repository-evidence/links-unsupported' },
+    { repository: { url: 'https://gitee.com/team/repo', provider: 'github' }, code: 'repository-evidence/provider-invalid' },
+    { repository: { url: 'https://user:SYNTHETIC_TOKEN@gitee.com/team/repo' }, code: 'repository-evidence/url-invalid' },
+    { repository: { url: 'https://gitee.com/team/repo?token=SYNTHETIC_TOKEN' }, code: 'repository-evidence/url-invalid' },
+    { repository: { url: 'https://gitee.com/team/repo#SYNTHETIC_TOKEN' }, code: 'repository-evidence/url-invalid' },
+    { repository: { url: 'https://gitee.com/team/%2e%2e/repo' }, code: 'repository-evidence/url-invalid' },
+    { repository: { url: 'https://gitee.com/team%2Frepo' }, code: 'repository-evidence/url-invalid' },
+    { repository: { url: 'file:///tmp/repo', link_mode: 'local-only' }, code: 'repository-evidence/url-invalid' },
+    { repository: { url: 'javascript:alert(1)', link_mode: 'local-only' }, code: 'repository-evidence/url-invalid' },
+    { repository: { link_mode: 'local-only' }, code: 'schema/required' },
   ]) {
     data.diagram.meta.repository = { revision: data.revision, ...repository };
     fs.writeFileSync(data.input, JSON.stringify(data.diagram));
     const result = run(['validate', 'architecture', data.input, '--repo-root', data.root, '--json']);
     assert.equal(result.status, 1, JSON.stringify(repository));
+    assert.ok(JSON.parse(result.stdout).diagnostics.some((entry) => entry.code === code), `${JSON.stringify(repository)}: ${result.stdout}`);
     assert.doesNotMatch(result.stdout + result.stderr, /SYNTHETIC_TOKEN/);
   }
 });
