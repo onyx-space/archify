@@ -76,6 +76,37 @@ test('Gitee evidence generates provider-specific revision and line links', () =>
   }
 });
 
+// Fork-restoration record for the upstream/main sync (fork main 1f1323e x upstream 50e2dcc).
+// The five fork-only commits dropped by that merge were re-applied onto upstream's rewrite:
+//   c3649a9 version fast-path / content-first home / fail-loud unknown command
+//     preserved: archify/bin/archify.mjs:15,24,2059,2068,2122
+//   b87c0b4 TOON output for validate/deliver/compare/migrate/doctor/demo
+//     preserved: archify/bin/archify.mjs:739,1203,1300,1438,1447,1586,1892,2046
+//   530ce3c zh-CN authoring default, preserved: archify/SKILL.md:83
+//   767f51b arbitrary git hosts for repository evidence
+//     host-agnostic parse: archify/renderers/shared/repository-location.mjs:28
+//     self-hosted HTTP links: archify/renderers/shared/repository-evidence.mjs:108-117
+//     .git suffix + owner/repo case: repository-location.mjs:30-40, repository-evidence.mjs:155
+//     provider accepted as a free-form string: archify/schemas/architecture.schema.json:33
+//     schema url pattern NOT reinstated: upstream moved authored-address shape checking into
+//     parseRepositoryRemote (repository-evidence/url-invalid), which is host-agnostic and
+//     already rejects credentials, query, fragment and dot segments. The fork regex only
+//     allowed https?://host/owner/repo and would drop upstream's ssh://, git@host:path and
+//     nested-namespace local-only addresses, so the code check is the equivalent restore.
+//   cb9db45 authoredSlug string fix: obsolete, matching now compares the parser identity
+//     string (repository-evidence.mjs:145) instead of the fork's {host,slug} object.
+// One fork behavior is intentionally not restored: the fork slug match ignored the host,
+// while this sync keeps upstream's strict identity (host, endpoint, path kind, owner/repo).
+//
+// Real internal-forge verification (CI cannot reach this host). h-machine Gitea:
+// http://192.168.1.4:3000/admin/seed-hunter, revision d2676d0b9d83fcbe5905277eb2aa7ed3b6fcd9c9
+//   git clone http://192.168.1.4:3000/admin/seed-hunter.git
+//   (a) origin `.git` clone_url + authored browser_url -> validate exit 0 (9/9 checks)
+//   (b) authored url carrying `.git` -> href emitted without `.git`
+//   (c) origin /Admin/Seed-Hunter.git -> validate exit 0
+// emitted href: http://192.168.1.4:3000/admin/seed-hunter/blob/<revision>/src/analyze.ts#L1-L20
+// commands + raw output: /Users/onyx/code/firstmate/data/fork-sync-conflict-archify/e2e-gitea.md
+
 test('self-hosted HTTP forges match clone suffixes and path case, dropping .git from links', () => {
   const data = fixture();
   const url = 'http://192.168.1.4:3000/admin/seed-hunter';
