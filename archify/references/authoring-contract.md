@@ -198,9 +198,9 @@ nor the current reader's access rights.
 generate revision-pinned links: public `github.com` and `gitee.com` addresses
 must use HTTPS, while self-hosted forges such as Gitea or GitLab also accept
 HTTP. `github.com` and `gitee.com` select the provider automatically, and an
-optional `provider` must agree with those recognized hosts; on any other host
-`provider` is free-form metadata. Existing GitHub declarations and default
-delivery receipt fields remain compatible.
+optional `provider` (`"github"` or `"gitee"`) must agree with those hosts; omit
+`provider` on any other host. Existing GitHub declarations and default delivery
+receipt fields remain compatible.
 
 ```json
 {

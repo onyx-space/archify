@@ -99,7 +99,7 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
   }
   const linkMode = repository.link_mode ?? 'web';
   if (!['web', 'local-only'].includes(linkMode)) evidenceFailure('repository-evidence/link-mode-invalid', 'Repository link_mode must be web or local-only.');
-  if (repository.provider !== undefined && location.provider !== null && repository.provider !== location.provider) {
+  if (repository.provider !== undefined && repository.provider !== location.provider) {
     evidenceFailure('repository-evidence/provider-invalid', 'Repository provider must match the host it names.', {
       subject: { path: '/meta/repository/provider' },
       supportedFixes: ['use the provider matching the repository host, or omit provider'],

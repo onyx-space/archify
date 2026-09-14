@@ -87,7 +87,9 @@ test('Gitee evidence generates provider-specific revision and line links', () =>
 //     host-agnostic parse: archify/renderers/shared/repository-location.mjs:28
 //     self-hosted HTTP links: archify/renderers/shared/repository-evidence.mjs:108-117
 //     .git suffix + owner/repo case: repository-location.mjs:30-40, repository-evidence.mjs:155
-//     provider accepted as a free-form string: archify/schemas/architecture.schema.json:33
+//     provider kept narrow: upstream's github/gitee enum stays at
+//     archify/schemas/architecture.schema.json:33, and repository-evidence.mjs:102 rejects a
+//     declared provider on a self-hosted host (upstream host-match check, no relaxed guard).
 //     schema url pattern NOT reinstated: upstream moved authored-address shape checking into
 //     parseRepositoryRemote (repository-evidence/url-invalid), which is host-agnostic and
 //     already rejects credentials, query, fragment and dot segments. The fork regex only
@@ -98,6 +100,27 @@ test('Gitee evidence generates provider-specific revision and line links', () =>
 // One fork behavior is intentionally not restored: the fork slug match ignored the host,
 // while this sync keeps upstream's strict identity (host, endpoint, path kind, owner/repo).
 //
+// Upstream test assertions changed by the restore (upstream -> fork, and why):
+//   repository-evidence.test.mjs 'local-only rejects different hosts, paths, path case, endpoints...'
+//     upstream: Team/repo vs team/repo, git@...:Team/repo vs git@...:Team/repo.git and
+//       http://.../Team/repo vs http://.../Team/repo.git must reject (byte-exact case + .git).
+//     fork: those three pairs removed (title drops 'path case') because the restore normalizes
+//       repository-path case and one terminal .git, so the pairs now match; other cases unchanged.
+//   architecture-delta.test.mjs 'portable compare retains link settings...'
+//     upstream: head url .../team/Services/repo.git vs base .../Team/Services/repo.git must throw
+//       'delta/repository-mismatch'.
+//     fork: assert.equal(compareArchitecture(...).proofLevel, 'revision-pinned') because identity
+//       is now case-insensitive; the canonical-url assertion keeps upstream's `.git` value
+//       (an intermediate flip in b98f1c8 was reverted by d294ff8).
+//   repository-evidence.test.mjs 'unsupported web providers...' -> 'unsupported web links...'
+//     upstream: exit 1 alone per case, including `{ url: 'https://git.internal/team/repo',
+//       provider: 'gitee' }`, which only passed there because self-hosted providers were accepted.
+//     fork: each case asserts its exact diagnostic code, and the self-hosted-provider case is
+//       removed because a declared provider is no longer accepted on a self-hosted host.
+// Fix rounds: 391e908 host-agnostic parse + self-hosted links, 4190127 http for self-hosted /
+// https for public forges, 08e6a48 exact diagnostic codes, b98f1c8 .git+case normalization and
+// the two assertion changes above, d294ff8 .git stripped in identity and emitted links.
+//
 // Real internal-forge verification (CI cannot reach this host). h-machine Gitea:
 // http://192.168.1.4:3000/admin/seed-hunter, revision d2676d0b9d83fcbe5905277eb2aa7ed3b6fcd9c9
 //   git clone http://192.168.1.4:3000/admin/seed-hunter.git
@@ -107,7 +130,7 @@ test('Gitee evidence generates provider-specific revision and line links', () =>
 // emitted href: http://192.168.1.4:3000/admin/seed-hunter/blob/<revision>/src/analyze.ts#L1-L20
 // commands + raw output: /Users/onyx/code/firstmate/data/fork-sync-conflict-archify/e2e-gitea.md
 
-test('self-hosted HTTP forges match clone suffixes and path case, dropping .git from links', () => {
+test('self-hosted HTTP forges normalize clone suffixes/case and reject declared providers', () => {
   const data = fixture();
   const url = 'http://192.168.1.4:3000/admin/seed-hunter';
   for (const origin of [`${url}.git`, 'http://192.168.1.4:3000/Admin/Seed-Hunter.git']) {
@@ -124,15 +147,14 @@ test('self-hosted HTTP forges match clone suffixes and path case, dropping .git 
     assert.equal(evidence.nodes.users[0].href, `${url}/blob/${data.revision}/src/router.js#L1-L3`);
     assert.equal(evidence.nodes.users[1].href, `${url}/blob/${data.revision}/src/store.js#L1`);
   }
-  data.diagram.meta.repository = { url: `${url}.git`, revision: data.revision, provider: 'gitea' };
-  git(data.root, 'remote', 'set-url', 'origin', `${url}.git`);
-  fs.writeFileSync(data.input, JSON.stringify(data.diagram));
-  const output = path.join(data.root, 'self-hosted-extension.html');
-  const delivered = run(['deliver', 'architecture', data.input, output, '--repo-root', data.root, '--json']);
-  assert.equal(delivered.status, 0, delivered.stderr || delivered.stdout);
-  const evidence = evidencePayload(fs.readFileSync(output, 'utf8'));
-  assert.equal(evidence.repository.href, `${url}/tree/${data.revision}`);
-  assert.equal(evidence.nodes.users[0].href, `${url}/blob/${data.revision}/src/router.js#L1-L3`);
+  for (const [provider, code] of [['gitea', 'schema/enum'], ['github', 'repository-evidence/provider-invalid']]) {
+    data.diagram.meta.repository = { url: `${url}.git`, revision: data.revision, provider };
+    git(data.root, 'remote', 'set-url', 'origin', `${url}.git`);
+    fs.writeFileSync(data.input, JSON.stringify(data.diagram));
+    const rejected = run(['validate', 'architecture', data.input, '--repo-root', data.root, '--json']);
+    assert.equal(rejected.status, 1, provider);
+    assert.ok(JSON.parse(rejected.stdout).diagnostics.some((entry) => entry.code === code), `${provider}: ${rejected.stdout}`);
+  }
 });
 
 test('public forges still require canonical HTTPS without a custom port', () => {
