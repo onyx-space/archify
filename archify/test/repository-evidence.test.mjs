@@ -76,23 +76,32 @@ test('Gitee evidence generates provider-specific revision and line links', () =>
   }
 });
 
-test('self-hosted HTTP forges generate revision-pinned source links', () => {
+test('self-hosted HTTP forges match clone suffixes and path case, dropping .git from links', () => {
   const data = fixture();
   const url = 'http://192.168.1.4:3000/admin/seed-hunter';
-  data.diagram.meta.repository = { url, revision: data.revision };
-  git(data.root, 'remote', 'set-url', 'origin', url);
+  for (const origin of [`${url}.git`, 'http://192.168.1.4:3000/Admin/Seed-Hunter.git']) {
+    data.diagram.meta.repository = { url, revision: data.revision };
+    git(data.root, 'remote', 'set-url', 'origin', origin);
+    fs.writeFileSync(data.input, JSON.stringify(data.diagram));
+    const validated = run(['validate', 'architecture', data.input, '--repo-root', data.root, '--json']);
+    assert.equal(validated.status, 0, `${origin}: ${validated.stderr || validated.stdout}`);
+    const output = path.join(data.root, 'self-hosted.html');
+    const delivered = run(['deliver', 'architecture', data.input, output, '--repo-root', data.root, '--json']);
+    assert.equal(delivered.status, 0, delivered.stderr || delivered.stdout);
+    const evidence = evidencePayload(fs.readFileSync(output, 'utf8'));
+    assert.equal(evidence.repository.href, `${url}/tree/${data.revision}`);
+    assert.equal(evidence.nodes.users[0].href, `${url}/blob/${data.revision}/src/router.js#L1-L3`);
+    assert.equal(evidence.nodes.users[1].href, `${url}/blob/${data.revision}/src/store.js#L1`);
+  }
+  data.diagram.meta.repository = { url: `${url}.git`, revision: data.revision, provider: 'gitea' };
+  git(data.root, 'remote', 'set-url', 'origin', `${url}.git`);
   fs.writeFileSync(data.input, JSON.stringify(data.diagram));
-  const validated = run(['validate', 'architecture', data.input, '--repo-root', data.root, '--json']);
-  assert.equal(validated.status, 0, validated.stderr || validated.stdout);
-  data.diagram.meta.repository.provider = 'gitea';
-  fs.writeFileSync(data.input, JSON.stringify(data.diagram));
-  const output = path.join(data.root, 'self-hosted.html');
+  const output = path.join(data.root, 'self-hosted-extension.html');
   const delivered = run(['deliver', 'architecture', data.input, output, '--repo-root', data.root, '--json']);
   assert.equal(delivered.status, 0, delivered.stderr || delivered.stdout);
   const evidence = evidencePayload(fs.readFileSync(output, 'utf8'));
   assert.equal(evidence.repository.href, `${url}/tree/${data.revision}`);
   assert.equal(evidence.nodes.users[0].href, `${url}/blob/${data.revision}/src/router.js#L1-L3`);
-  assert.equal(evidence.nodes.users[1].href, `${url}/blob/${data.revision}/src/store.js#L1`);
 });
 
 test('public forges still require canonical HTTPS without a custom port', () => {
@@ -173,14 +182,13 @@ for (const [name, url, origin] of [
   });
 }
 
-test('local-only rejects different hosts, paths, path case, endpoints and guessed prefixes', () => {
+test('local-only rejects different hosts, paths, endpoints and guessed prefixes', () => {
   const data = fixture();
   const output = path.join(data.root, 'trusted.html');
   fs.writeFileSync(output, 'trusted previous artifact');
   for (const [url, remote] of [
     ['https://git.internal/Team/repo', 'https://other.internal/Team/repo'],
     ['https://git.internal/Team/repo', 'https://git.internal/Team/other'],
-    ['https://git.internal/Team/repo', 'https://git.internal/team/repo'],
     ['https://git.internal/Team/repo', 'http://git.internal/Team/repo'],
     ['https://git.internal/Team/repo', 'https://git.internal:8443/Team/repo'],
     ['ssh://git@git.internal:2222/Team/repo', 'ssh://git@git.internal:2223/Team/repo'],
@@ -190,8 +198,6 @@ test('local-only rejects different hosts, paths, path case, endpoints and guesse
     ['https://git.internal/Team/repo', 'https://git.internal/Team/ignored/../repo'],
     ['https://git.internal/Team/repo', 'git@git.internal:Team/repo'],
     ['https://git.internal/Team/repo', 'ssh://git@git.internal/Team/repo'],
-    ['git@git.internal:Team/repo', 'git@git.internal:Team/repo.git'],
-    ['http://git.internal/Team/repo', 'http://git.internal/Team/repo.git'],
   ]) {
     data.diagram.meta.repository = { url, revision: data.revision, link_mode: 'local-only' };
     fs.writeFileSync(data.input, JSON.stringify(data.diagram));

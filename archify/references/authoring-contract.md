@@ -229,12 +229,12 @@ origin is not supported.
 Local-only accepts HTTP(S), `git@host:path`, and `ssh://git@host[:port]/path`
 addresses, including nested namespaces. Declare a credential-free address;
 HTTP(S) credentials on the checkout's origin are ignored for identity and
-redacted from diagnostics. Hostnames compare case-insensitively; repository
-paths retain case except for the existing GitHub behavior. A trailing slash
-normalizes away. Only GitHub and Gitee normalize a terminal `.git` and match
-standard HTTPS/443 with Git SSH/22. For other hosts, use the actual clone address:
-transport, port, `.git` suffix, and remote-relative versus absolute paths must
-match. For example, `git@host:Team/repo` differs from
+redacted from diagnostics. Hostnames and repository paths compare
+case-insensitively, and one terminal `.git` clone suffix normalizes away for
+every host, including the links web mode emits. A trailing slash normalizes
+away as well. GitHub and Gitee additionally match standard HTTPS/443 with Git
+SSH/22. For other hosts the transport, port, and remote-relative versus absolute
+path must match. For example, `git@host:Team/repo` differs from
 `ssh://git@host/Team/repo`; `git@host:/Team/repo` matches the latter. SCP-style
 paths preserve literal percent escapes, while URI paths decode them. SSH host
 aliases and forge-specific browse/clone prefixes are not guessed.
