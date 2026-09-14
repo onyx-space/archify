@@ -76,9 +76,9 @@ test('Gitee evidence generates provider-specific revision and line links', () =>
   }
 });
 
-test('self-hosted HTTPS forges generate revision-pinned source links', () => {
+test('self-hosted HTTP forges generate revision-pinned source links', () => {
   const data = fixture();
-  const url = 'https://192.168.88.19:8418/AI.Buddy/evidence-repo';
+  const url = 'http://192.168.1.4:3000/admin/seed-hunter';
   data.diagram.meta.repository = { url, revision: data.revision };
   git(data.root, 'remote', 'set-url', 'origin', url);
   fs.writeFileSync(data.input, JSON.stringify(data.diagram));
@@ -93,6 +93,18 @@ test('self-hosted HTTPS forges generate revision-pinned source links', () => {
   assert.equal(evidence.repository.href, `${url}/tree/${data.revision}`);
   assert.equal(evidence.nodes.users[0].href, `${url}/blob/${data.revision}/src/router.js#L1-L3`);
   assert.equal(evidence.nodes.users[1].href, `${url}/blob/${data.revision}/src/store.js#L1`);
+});
+
+test('public forges still require canonical HTTPS without a custom port', () => {
+  const data = fixture();
+  for (const url of ['http://github.com/example/evidence-repo', 'https://github.com:8443/example/evidence-repo']) {
+    data.diagram.meta.repository = { url, revision: data.revision };
+    git(data.root, 'remote', 'set-url', 'origin', url);
+    fs.writeFileSync(data.input, JSON.stringify(data.diagram));
+    const result = run(['validate', 'architecture', data.input, '--repo-root', data.root, '--json']);
+    assert.equal(result.status, 1, url);
+    assert.ok(JSON.parse(result.stdout).diagnostics.some(({ code }) => code === 'repository-evidence/links-unsupported'), result.stdout);
+  }
 });
 
 test('local-only evidence verifies HTTP self-hosted origins without generating links', () => {

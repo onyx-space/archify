@@ -105,10 +105,14 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
       supportedFixes: ['use the provider matching the repository host, or omit provider'],
     });
   }
-  if (linkMode === 'web' && (location.protocol !== 'https:' || (location.provider !== null && location.endpoint !== 'standard') || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(location.path))) {
-    evidenceFailure('repository-evidence/links-unsupported', 'Web source links require an HTTPS owner/repository URL.', {
+  const supportedProtocol = location.provider === null
+    ? location.protocol === 'http:' || location.protocol === 'https:'
+    : location.protocol === 'https:';
+  const supportedEndpoint = location.provider === null || location.endpoint === 'standard';
+  if (linkMode === 'web' && (!supportedProtocol || !supportedEndpoint || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(location.path))) {
+    evidenceFailure('repository-evidence/links-unsupported', 'Web source links require a canonical public HTTPS URL or a self-hosted HTTP(S) owner/repository URL.', {
       subject: { path: '/meta/repository/url' },
-      supportedFixes: ['use an HTTPS owner/repository URL, or select link_mode: local-only to retain local verification without web links'],
+      supportedFixes: ['use the repository URL that serves the sources, or select link_mode: local-only to retain local verification without web links'],
     });
   }
   if (!repoRootInput) {

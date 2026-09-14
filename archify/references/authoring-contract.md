@@ -194,10 +194,11 @@ blob, and valid line range are required in every link mode. Verification is
 local and makes no remote requests; it establishes neither public availability
 nor the current reader's access rights.
 
-`link_mode` defaults to `web`. HTTPS repository URLs with an `owner/repository`
-path generate revision-pinned links, including self-hosted forges such as Gitea
-or GitLab. `github.com` and `gitee.com` select the provider automatically, and
-an optional `provider` must agree with those recognized hosts; on any other host
+`link_mode` defaults to `web`. Repository URLs with an `owner/repository` path
+generate revision-pinned links: public `github.com` and `gitee.com` addresses
+must use HTTPS, while self-hosted forges such as Gitea or GitLab also accept
+HTTP. `github.com` and `gitee.com` select the provider automatically, and an
+optional `provider` must agree with those recognized hosts; on any other host
 `provider` is free-form metadata. Existing GitHub declarations and default
 delivery receipt fields remain compatible.
 
@@ -209,8 +210,8 @@ delivery receipt fields remain compatible.
 }
 ```
 
-For a repository that cannot publish web links (an HTTP or SSH-only address, a
-nested namespace, or an internal-only host), select `link_mode: "local-only"`. The
+For a repository that cannot publish web links (an SSH-only address, a nested
+namespace, or a host readers cannot reach), select `link_mode: "local-only"`. The
 Viewer retains SRC markers, searchable file paths, line ranges, and revision
 labels without repository or source hyperlinks. The evidence receipt adds
 `linkMode: "local-only"`. `url` remains required as the expected origin identity;
@@ -239,8 +240,8 @@ paths preserve literal percent escapes, while URI paths decode them. SSH host
 aliases and forge-specific browse/clone prefixes are not guessed.
 Web links assume a forge browse shape like GitHub's
 `/blob/<revision>/<path>#L<start>-L<end>` and are never checked against the
-remote. Use `local-only` for HTTP or SSH addresses, nested namespaces, and any
-forge whose link shape differs.
+remote. Use `local-only` for SSH addresses, nested namespaces, and any forge
+whose link shape differs.
 
 ## Hand-placed fallback
 
