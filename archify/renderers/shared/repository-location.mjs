@@ -29,7 +29,7 @@ export function parseRepositoryRemote(value, { authored = false } = {}) {
   const last = segments.length - 1;
   if (provider) segments[last] = segments[last].replace(/\.git$/i, '');
   const undecorated = segments[last].replace(/\.git$/i, '');
-  if (!undecorated) return null;
+  if (!undecorated || undecorated === '.' || undecorated === '..') return null;
   const repositoryPath = segments.join('/');
   // Only known forges map HTTPS and SSH to one repository namespace. Other
   // hosts retain transport, port and remote-relative/absolute path semantics.
