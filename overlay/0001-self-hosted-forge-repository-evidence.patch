@@ -200,18 +200,13 @@ diff --git a/archify/test/repository-evidence.test.mjs b/archify/test/repository
 index 0d548de..d55e9a7 100644
 --- a/archify/test/repository-evidence.test.mjs
 +++ b/archify/test/repository-evidence.test.mjs
-@@ -76,6 +76,120 @@ test('Gitee evidence generates provider-specific revision and line links', () =>
+@@ -76,6 +76,102 @@ test('Gitee evidence generates provider-specific revision and line links', () =>
    }
  });
  
 +// Fork-restoration record for the upstream/main sync (fork main 1f1323e x upstream 50e2dcc).
 +// Line numbers below are anchored to the tree after the later upstream/main merge (30fd463).
-+// The five fork-only commits dropped by that merge were re-applied onto upstream's rewrite:
-+//   c3649a9 version fast-path / content-first home / fail-loud unknown command
-+//     preserved: archify/bin/archify.mjs:15,24,2085,2094,2150
-+//   b87c0b4 TOON output for validate/deliver/compare/migrate/doctor/demo
-+//     preserved: archify/bin/archify.mjs:764,1228,1325,1463,1472,1611,1917,2071
-+//   530ce3c zh-CN authoring default, preserved: archify/SKILL.md:83
++// The repository-evidence fork commits dropped by that merge were re-applied onto upstream's rewrite:
 +//   767f51b arbitrary git hosts for repository evidence
 +//     host-agnostic parse: archify/renderers/shared/repository-location.mjs:28
 +//     self-hosted HTTP links: archify/renderers/shared/repository-evidence.mjs:108-117
@@ -252,19 +247,6 @@ index 0d548de..d55e9a7 100644
 +//       was dropped there too while the relaxed guard accepted it (it then failed later as
 +//       origin-mismatch); fd78d99 restored the strict guard, so the case is back with code
 +//       repository-evidence/provider-invalid.
-+//   cli.test.mjs 'cli: doctor ...' (3 tests) and 'cli: demo ...'
-+//     upstream: /\[ok\] <label>/, /\[missing\] <label>/, /\[invalid\] <label>/, /Archify is ready\./,
-+//       new RegExp(`Demo ready: <output>`), /Next: open the HTML in your browser/.
-+//     fork: /\s+ok,<label>/, /\s+missing,<label>/, /\s+invalid,<label>/, /status: ready/,
-+//       new RegExp(`output: <output>`), /next: open the HTML in a browser/ — reason: the restored
-+//       fork TOON output (b87c0b4) replaced the bracket-prefixed doctor rows and `Demo ready` text.
-+//   output-path.test.mjs 'doctor reports a missing output-path safety runtime ...'
-+//     upstream: /\[missing\] Output path safety runtime/ -> fork: /missing,Output path safety runtime/
-+//       (same restored doctor TOON output).
-+//   cursor-onboarding.test.mjs 'the zero-dependency archive works from the canonical Cursor-visible agent path'
-+//     NOT touched by these overlay patches: a patched tree keeps upstream's /Archify is ready\./
-+//     assertion, because its packaged archify.zip is upstream's too. The assertion only needs
-+//     /status: ready/ after a manual scripts/build-zip.sh rebuild, as overlay/README.md documents.
 +// Fix rounds: 391e908 host-agnostic parse + self-hosted links, 4190127 http for self-hosted /
 +// https for public forges, 08e6a48 exact diagnostic codes, b98f1c8 .git+case normalization and
 +// the two assertion changes above, d294ff8 .git stripped in identity and emitted links, fd78d99

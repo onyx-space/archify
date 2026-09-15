@@ -23,18 +23,17 @@ bash overlay/apply.sh                          # re-apply the local capabilities
 | Patch | Capability | Origin |
 | --- | --- | --- |
 | `0001-self-hosted-forge-repository-evidence.patch` | Repository evidence for self-hosted forges: host-agnostic remote parsing, `.git`-suffix and owner/repo case normalization, `http://` web source links for self-hosted hosts while public forges (`github.com`, `gitee.com`) still require HTTPS on the standard endpoint, `link_mode: local-only` preserved | fork `767f51b` + `cb9db45`, reconstructed on upstream's `repository-location.mjs` rewrite (PR #354) and extended with the self-hosted HTTP rule |
-| `0002-axi-toon-cli-output.patch` | TOON-shaped `validate` / `deliver` / `compare` / `migrate` / `doctor` / `demo` output, version fast-path, content-first home, fail-loud unknown command | fork `c3649a9` + `b87c0b4` |
-| `0003-skill-default-zh-cn-authoring.patch` | This fork defaults to zh-CN authoring in `archify/SKILL.md` | fork `530ce3c` |
 
-`apply.sh` applies them in filename order and rolls back on failure.
+`apply.sh` applies the patches in filename order and rolls back on failure.
 
 ## What applying the overlay does *not* do
 
 * **`archify.zip` is not patched, and the canonical-archive gate cannot pass on
-  a patched tree.** The archive stays upstream's published artifact. The
-  patches rewrite files that are packaged into it (`archify/bin/archify.mjs`,
-  `archify/SKILL.md`, `archify/references/authoring-contract.md`,
-  `archify/renderers/shared/*`), while `archify.zip` keeps upstream's bytes, so
+  a patched tree.** The archive stays upstream's published artifact. The patch
+  rewrites files that are packaged into it
+  (`archify/references/authoring-contract.md`,
+  `archify/renderers/shared/*`, `archify/schemas/README.md`), while
+  `archify.zip` keeps upstream's bytes, so
   `archify/test/release-package-gates.test.mjs`'s "archive build is
   byte-for-byte reproducible" case — a fresh build must byte-equal the
   committed archive — is false by design. That is accepted as a known
@@ -44,25 +43,21 @@ bash overlay/apply.sh                          # re-apply the local capabilities
   no Node 22 needed — the committed archive still embeds the pre-patch file:
 
   ```sh
-  unzip -p archify.zip archify/bin/archify.mjs | shasum -a 256
-  # 13f0f1ea8f3da1b090360c848079a877752bec1554e26c57377573673dd687d8 (unpatched)
-  shasum -a 256 archify/bin/archify.mjs
-  # 6a75d9fa55c4d3f1ee83b17290329bc998986de168777db5b455674673767e67 (patched)
+  unzip -p archify.zip archify/renderers/shared/repository-location.mjs | shasum -a 256
+  # e82fa68ab46e71566eb7aefdb48f6df67b34fd27ce36489e7787410dbfba05ce (unpatched)
+  shasum -a 256 archify/renderers/shared/repository-location.mjs
+  # 120c92f4c45edc2217509463df773b9d97b5e5f4aa39c8cba8b7d59a72c01659 (patched)
   ```
 
   Everything else the overlay affects is green on a patched tree; see
   `## Verification`.
-* After a manual `scripts/build-zip.sh` rebuild,
-  `archify/test/cursor-onboarding.test.mjs` — which runs the *packaged* CLI —
-  still asserts upstream's `Archify is ready.` while the AXI overlay prints
-  `status: ready`; that assertion then needs updating too.
 * Two upstream CI jobs are baseline-only and cannot pass on this fork regardless
   of the overlay: `published-update-manifest` (the fork publishes no GitHub
   Release, so `releases/latest` is a 404) and `zip-freshness` on a patched tree.
 
 ## Upstream test assertions the overlay rewrites
 
-The patches keep upstream's test files except where a restored capability
+The patch keeps upstream's test files except where a restored capability
 changes the expected outcome. Each entry is upstream → overlay → reason.
 
 * `archify/test/repository-evidence.test.mjs`, `local-only rejects different
@@ -91,20 +86,6 @@ changes the expected outcome. Each entry is upstream → overlay → reason.
   `repository-evidence/links-unsupported`) plus `{ url:
   'https://git.internal/team/repo', provider: 'gitee' }`
   (`repository-evidence/provider-invalid`).
-* `archify/test/cli.test.mjs`, `cli: doctor …` and `cli: demo …`: upstream
-  matched `[ok] <label>` / `[missing] <label>` / `[invalid] <label>` /
-  `Archify is ready.`, `Demo ready: <path>`, `Next: open the HTML in your
-  browser`; the overlay matches `ok,<label>` / `missing,<label>` /
-  `invalid,<label>` / `status: ready`, `output: <path>`, `next: open the HTML in
-  a browser` — the restored TOON output (fork `b87c0b4`).
-* `archify/test/output-path.test.mjs`, `doctor reports a missing output-path
-  safety runtime in an installed skill`: upstream matched `[missing] Output path
-  safety runtime`; the overlay matches `missing,Output path safety runtime`
-  (same restored TOON output).
-* `archify/test/cursor-onboarding.test.mjs`: **not touched by the overlay
-  patches.** A patched tree keeps upstream's `/Archify is ready\./`; only after
-  a `scripts/build-zip.sh` rebuild does the packaged CLI print `status: ready`
-  and that assertion need updating (see the `archify.zip` note above).
 
 ## Verification
 
@@ -120,14 +101,12 @@ git checkout upstream/main -- archify/renderers/shared/repository-location.mjs \
 node --test archify/test/repository-evidence.test.mjs   # self-hosted-forge test fails
 ```
 
-On the patched tree the four test files the overlay rewrites are green:
+On the patched tree the two test files the overlay rewrites are green:
 
 ```sh
 node --test archify/test/repository-evidence.test.mjs \
-  archify/test/architecture-delta.test.mjs \
-  archify/test/cli.test.mjs \
-  archify/test/output-path.test.mjs
-# tests 118 | pass 117 | fail 0 | skipped 1
+  archify/test/architecture-delta.test.mjs
+# tests 52 | pass 51 | fail 0 | skipped 1
 ```
 
 The rest of the suite is not run here: `release-package-gates.test.mjs`'s
