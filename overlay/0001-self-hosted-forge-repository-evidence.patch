@@ -1,0 +1,385 @@
+diff --git a/archify/references/authoring-contract.md b/archify/references/authoring-contract.md
+index 70fb158..9b83dcd 100644
+--- a/archify/references/authoring-contract.md
++++ b/archify/references/authoring-contract.md
+@@ -194,10 +194,13 @@ blob, and valid line range are required in every link mode. Verification is
+ local and makes no remote requests; it establishes neither public availability
+ nor the current reader's access rights.
+ 
+-`link_mode` defaults to `web`. GitHub and Gitee HTTPS repository URLs generate
+-revision-pinned links; their public hosts select the provider automatically.
+-Optional `provider: "github"` or `"gitee"` must agree with the host. Existing
+-GitHub declarations and default delivery receipt fields remain compatible.
++`link_mode` defaults to `web`. Repository URLs with an `owner/repository` path
++generate revision-pinned links: public `github.com` and `gitee.com` addresses
++must use HTTPS, while self-hosted forges such as Gitea or GitLab also accept
++HTTP. `github.com` and `gitee.com` select the provider automatically, and an
++optional `provider` (`"github"` or `"gitee"`) must agree with those hosts; omit
++`provider` on any other host. Existing GitHub declarations and default delivery
++receipt fields remain compatible.
+ 
+ ```json
+ {
+@@ -207,7 +210,8 @@ GitHub declarations and default delivery receipt fields remain compatible.
+ }
+ ```
+ 
+-For an internal or unsupported forge, select `link_mode: "local-only"`. The
++For a repository that cannot publish web links (an SSH-only address, a nested
++namespace, or a host readers cannot reach), select `link_mode: "local-only"`. The
+ Viewer retains SRC markers, searchable file paths, line ranges, and revision
+ labels without repository or source hyperlinks. The evidence receipt adds
+ `linkMode: "local-only"`. `url` remains required as the expected origin identity;
+@@ -225,18 +229,19 @@ origin is not supported.
+ Local-only accepts HTTP(S), `git@host:path`, and `ssh://git@host[:port]/path`
+ addresses, including nested namespaces. Declare a credential-free address;
+ HTTP(S) credentials on the checkout's origin are ignored for identity and
+-redacted from diagnostics. Hostnames compare case-insensitively; repository
+-paths retain case except for the existing GitHub behavior. A trailing slash
+-normalizes away. Only GitHub and Gitee normalize a terminal `.git` and match
+-standard HTTPS/443 with Git SSH/22. For other hosts, use the actual clone address:
+-transport, port, `.git` suffix, and remote-relative versus absolute paths must
+-match. For example, `git@host:Team/repo` differs from
++redacted from diagnostics. Hostnames and repository paths compare
++case-insensitively, and one terminal `.git` clone suffix normalizes away for
++every host, including the links web mode emits. A trailing slash normalizes
++away as well. GitHub and Gitee additionally match standard HTTPS/443 with Git
++SSH/22. For other hosts the transport, port, and remote-relative versus absolute
++path must match. For example, `git@host:Team/repo` differs from
+ `ssh://git@host/Team/repo`; `git@host:/Team/repo` matches the latter. SCP-style
+ paths preserve literal percent escapes, while URI paths decode them. SSH host
+ aliases and forge-specific browse/clone prefixes are not guessed.
+-GitLab/Gitea/Forgejo/Bitbucket web links are not implemented in this version;
+-use local-only until a tested link provider is available. Unknown web providers
+-fail with a diagnostic rather than emitting a guessed link.
++Web links assume a forge browse shape like GitHub's
++`/blob/<revision>/<path>#L<start>-L<end>` (Gitee uses `#L<start>-<end>`) and are
++never checked against the remote. Use `local-only` for SSH addresses, nested
++namespaces, and any forge whose link shape differs.
+ 
+ ## Hand-placed fallback
+ 
+diff --git a/archify/renderers/shared/repository-evidence.mjs b/archify/renderers/shared/repository-evidence.mjs
+index fdfa531..6420f64 100644
+--- a/archify/renderers/shared/repository-evidence.mjs
++++ b/archify/renderers/shared/repository-evidence.mjs
+@@ -94,21 +94,25 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
+   if (!location) {
+     evidenceFailure('repository-evidence/url-invalid', '/meta/repository/url must be a credential-free HTTP(S) or Git SSH repository address without query, fragment, or dot segments.', {
+       subject: { path: '/meta/repository/url' },
+-      supportedFixes: ['declare the matching repository address without credentials; use link_mode: local-only for internal repositories'],
++      supportedFixes: ['declare the matching credential-free repository address; internal HTTP(S) forges can use link_mode: web, and local-only still validates the same address'],
+     });
+   }
+   const linkMode = repository.link_mode ?? 'web';
+   if (!['web', 'local-only'].includes(linkMode)) evidenceFailure('repository-evidence/link-mode-invalid', 'Repository link_mode must be web or local-only.');
+-  if (repository.provider !== undefined && (!['github', 'gitee'].includes(repository.provider) || repository.provider !== location.provider)) {
+-    evidenceFailure('repository-evidence/provider-invalid', 'Repository provider must match its supported public host (github.com or gitee.com).', {
++  if (repository.provider !== undefined && repository.provider !== location.provider) {
++    evidenceFailure('repository-evidence/provider-invalid', 'Repository provider must match the host it names.', {
+       subject: { path: '/meta/repository/provider' },
+-      supportedFixes: ['use the matching provider or omit provider and select link_mode: local-only'],
++      supportedFixes: ['use the provider matching the repository host, or omit provider'],
+     });
+   }
+-  if (linkMode === 'web' && (!location.provider || location.protocol !== 'https:' || location.endpoint !== 'standard' || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(location.path))) {
+-    evidenceFailure('repository-evidence/links-unsupported', 'Web source links require a canonical GitHub or Gitee HTTPS owner/repository URL.', {
++  const supportedProtocol = location.provider === null
++    ? location.protocol === 'http:' || location.protocol === 'https:'
++    : location.protocol === 'https:';
++  const supportedEndpoint = location.provider === null || location.endpoint === 'standard';
++  if (linkMode === 'web' && (!supportedProtocol || !supportedEndpoint || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(location.path))) {
++    evidenceFailure('repository-evidence/links-unsupported', 'Web source links require a canonical public HTTPS URL or a self-hosted HTTP(S) owner/repository URL.', {
+       subject: { path: '/meta/repository/url' },
+-      supportedFixes: ['use a canonical GitHub or Gitee URL, or select link_mode: local-only to retain local verification without web links'],
++      supportedFixes: ['use the repository URL that serves the sources, or select link_mode: local-only to retain local verification without web links'],
+     });
+   }
+   if (!repoRootInput) {
+@@ -148,6 +152,7 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
+   }
+ 
+   const revision = repository.revision.toLowerCase();
++  const linkUrl = location.url.replace(/\.git$/i, '');
+   const commit = runGit(realRoot, ['cat-file', '-e', `${revision}^{commit}`]);
+   if (commit.status !== 0) {
+     evidenceFailure('repository-evidence/revision-unavailable', `Evidence revision ${revision} is not available in the local repository.`, {
+@@ -210,7 +215,7 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
+           });
+         }
+       }
+-      verified.push({ ...source, ...(linkMode === 'web' ? { href: repositorySourceHref(location.provider, location.url, revision, source) } : {}) });
++      verified.push({ ...source, ...(linkMode === 'web' ? { href: repositorySourceHref(location.provider, linkUrl, revision, source) } : {}) });
+       referenceCount += 1;
+     }
+     nodes[component.id] = verified;
+@@ -226,11 +231,11 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
+     schemaVersion: 1,
+     verified: true,
+     repository: {
+-      url: location.url,
++      url: linkUrl,
+       revision,
+       shortRevision: revision.slice(0, 7),
+-      label: location.provider === 'github' ? location.path : location.url.replace(/^(?:https?:\/\/|ssh:\/\/git@|git@)/, ''),
+-      ...(linkMode === 'web' ? { href: `${location.url}/tree/${revision}` } : { linkMode }),
++      label: location.provider === 'github' ? location.path : linkUrl.replace(/^(?:https?:\/\/|ssh:\/\/git@|git@)/, ''),
++      ...(linkMode === 'web' ? { href: `${linkUrl}/tree/${revision}` } : { linkMode }),
+     },
+     referenceCount,
+     nodes,
+diff --git a/archify/renderers/shared/repository-location.mjs b/archify/renderers/shared/repository-location.mjs
+index 32257d6..4fbaeb9 100644
+--- a/archify/renderers/shared/repository-location.mjs
++++ b/archify/renderers/shared/repository-location.mjs
+@@ -27,8 +27,9 @@ export function parseRepositoryRemote(value, { authored = false } = {}) {
+   if (!hostname) return null;
+   const provider = hostname === 'github.com' ? 'github' : hostname === 'gitee.com' ? 'gitee' : null;
+   const last = segments.length - 1;
+-  if (provider) segments[last] = segments[last].replace(provider === 'github' ? /\.git$/i : /\.git$/, '');
+-  if (!segments[last] || segments[last] === '.' || segments[last] === '..') return null;
++  if (provider) segments[last] = segments[last].replace(/\.git$/i, '');
++  const undecorated = segments[last].replace(/\.git$/i, '');
++  if (!undecorated || undecorated === '.' || undecorated === '..') return null;
+   const repositoryPath = segments.join('/');
+   // Only known forges map HTTPS and SSH to one repository namespace. Other
+   // hosts retain transport, port and remote-relative/absolute path semantics.
+@@ -36,7 +37,7 @@ export function parseRepositoryRemote(value, { authored = false } = {}) {
+   const endpoint = provider && ((protocol === 'https:' && port === '443') || (protocol === 'ssh:' && port === '22'))
+     ? 'standard' : `${protocol}${port}`;
+   const pathKind = provider ? 'repository' : scp && !scpAbsolute ? 'relative' : 'absolute';
+-  const identityPath = provider === 'github' ? repositoryPath.toLowerCase() : repositoryPath;
++  const identityPath = (provider ? repositoryPath : [...segments.slice(0, last), undecorated].join('/')).toLowerCase();
+   const encodedPath = segments.map(encodeURIComponent).join('/');
+   const canonicalUrl = scp ? `git@${hostname}:${scpAbsolute ? '/' : ''}${repositoryPath}`
+     : `${protocol}//${protocol === 'ssh:' ? 'git@' : ''}${url.host}/${encodedPath}`;
+@@ -52,7 +53,7 @@ export function redactRepositoryRemote(value) {
+ export function repositorySourceHref(provider, url, revision, source) {
+   const encodedPath = source.path.split('/').map(encodeURIComponent).join('/');
+   const end = source.endLine && source.endLine !== source.line
+-    ? `-${provider === 'github' ? 'L' : ''}${source.endLine}` : '';
++    ? `-${provider === 'gitee' ? '' : 'L'}${source.endLine}` : '';
+   const fragment = source.line ? `#L${source.line}${end}` : '';
+   return `${url}/blob/${revision}/${encodedPath}${fragment}`;
+ }
+diff --git a/archify/schemas/README.md b/archify/schemas/README.md
+index 4a43011..cc7ccc7 100644
+--- a/archify/schemas/README.md
++++ b/archify/schemas/README.md
+@@ -164,13 +164,14 @@ not exist in the diagram's semantic collection, and duplicate authored
+ relationship IDs within the mode's relationship collection.
+ 
+ Architecture additionally supports opt-in, revision-pinned repository evidence.
+-`meta.repository` names a public GitHub URL and full commit SHA; a component may
++`meta.repository` names a repository URL and full commit SHA; a component may
+ carry one to three `sources` with repo-relative POSIX paths, optional line
+ ranges, and optional labels. Shape is schema-checked, then the renderer requires
+ `--repo-root`: the local Git origin must match, and Git must prove the commit,
+ blobs, and requested lines. Verified evidence is embedded outside the canonical
+ SVG for the Semantic Passport and Node Finder; ordinary documents and visual
+-exports carry no repository evidence.
++exports carry no repository evidence. See `../references/authoring-contract.md`
++for the supported hosts, `link_mode`, and address rules.
+ 
+ ## Visual quality and engineering truth
+ 
+diff --git a/archify/test/architecture-delta.test.mjs b/archify/test/architecture-delta.test.mjs
+index 5c6a333..8323544 100644
+--- a/archify/test/architecture-delta.test.mjs
++++ b/archify/test/architecture-delta.test.mjs
+@@ -277,7 +277,7 @@ test('portable compare retains link settings and uses the same repository identi
+   assert.equal(canonical.meta.repository.url, 'https://git.internal/Team/Services/repo.git');
+   assert.equal(compareArchitecture(base, head, { baseVerified: true, headVerified: true }).proofLevel, 'revision-pinned');
+   head.meta.repository.url = 'https://git.internal/team/Services/repo.git';
+-  assert.throws(() => compareArchitecture(base, head), (error) => error.code === 'delta/repository-mismatch');
++  assert.equal(compareArchitecture(base, head, { baseVerified: true, headVerified: true }).proofLevel, 'revision-pinned');
+   base.meta.repository = { url: 'https://gitee.com/Team/repo', revision: 'a'.repeat(40), provider: 'gitee' };
+   assert.equal(JSON.parse(canonicalArchitectureJson(base)).meta.repository.provider, 'gitee');
+ });
+diff --git a/archify/test/repository-evidence.test.mjs b/archify/test/repository-evidence.test.mjs
+index 0d548de..d55e9a7 100644
+--- a/archify/test/repository-evidence.test.mjs
++++ b/archify/test/repository-evidence.test.mjs
+@@ -76,6 +76,116 @@ test('Gitee evidence generates provider-specific revision and line links', () =>
+   }
+ });
+ 
++// Fork-restoration record for the upstream/main sync (fork main 1f1323e x upstream 50e2dcc).
++// The five fork-only commits dropped by that merge were re-applied onto upstream's rewrite:
++//   c3649a9 version fast-path / content-first home / fail-loud unknown command
++//     preserved: archify/bin/archify.mjs:15,24,2059,2068,2122
++//   b87c0b4 TOON output for validate/deliver/compare/migrate/doctor/demo
++//     preserved: archify/bin/archify.mjs:739,1203,1300,1438,1447,1586,1892,2046
++//   530ce3c zh-CN authoring default, preserved: archify/SKILL.md:83
++//   767f51b arbitrary git hosts for repository evidence
++//     host-agnostic parse: archify/renderers/shared/repository-location.mjs:28
++//     self-hosted HTTP links: archify/renderers/shared/repository-evidence.mjs:108-117
++//     .git suffix + owner/repo case: repository-location.mjs:30-40, repository-evidence.mjs:155
++//     provider kept narrow: upstream's github/gitee enum stays at
++//     archify/schemas/architecture.schema.json:33, and repository-evidence.mjs:102 rejects a
++//     declared provider on a self-hosted host (upstream host-match check, no relaxed guard).
++//     schema url pattern NOT reinstated: upstream moved authored-address shape checking into
++//     parseRepositoryRemote (repository-evidence/url-invalid), which is host-agnostic and
++//     already rejects credentials, query, fragment and dot segments. The fork regex only
++//     allowed https?://host/owner/repo and would drop upstream's ssh://, git@host:path and
++//     nested-namespace local-only addresses, so the code check is the equivalent restore.
++//   cb9db45 authoredSlug string fix: obsolete, matching now compares the parser identity
++//     string (repository-evidence.mjs:145) instead of the fork's {host,slug} object.
++// One fork behavior is intentionally not restored: the fork slug match ignored the host,
++// while this sync keeps upstream's strict identity (host, endpoint, path kind, owner/repo).
++//
++// Upstream test assertions changed by the restore (upstream -> fork, and why):
++//   repository-evidence.test.mjs 'local-only rejects different hosts, paths, path case, endpoints...'
++//     upstream: Team/repo vs team/repo, git@...:Team/repo vs git@...:Team/repo.git and
++//       http://.../Team/repo vs http://.../Team/repo.git must reject (byte-exact case + .git).
++//     fork: those three pairs removed (title drops 'path case') because the restore normalizes
++//       repository-path case and one terminal .git, so the pairs now match; other cases unchanged.
++//   architecture-delta.test.mjs 'portable compare retains link settings...'
++//     upstream: head url .../team/Services/repo.git vs base .../Team/Services/repo.git must throw
++//       'delta/repository-mismatch'.
++//     fork: assert.equal(compareArchitecture(...).proofLevel, 'revision-pinned') because identity
++//       is now case-insensitive; the canonical-url assertion keeps upstream's `.git` value
++//       (an intermediate flip in b98f1c8 was reverted by d294ff8).
++//   repository-evidence.test.mjs 'unsupported web providers...' -> 'unsupported web links...'
++//     upstream: exit 1 alone per case; `{ url: 'https://git.internal/team/repo', provider: 'gitee' }`
++//       already exited 1 there, because upstream's provider guard required the declared provider to
++//       equal the host-derived one and rejected it as repository-evidence/provider-invalid.
++//     fork: each case asserts its exact diagnostic code instead of bare exit 1. The self-hosted
++//       provider case was dropped by 08e6a48 while the relaxed guard accepted it (it then failed
++//       later as origin-mismatch); fd78d99 restored the strict guard, so the case is back with code
++//       repository-evidence/provider-invalid.
++//   cli.test.mjs 'cli: doctor ...' (3 tests) and 'cli: demo ...'
++//     upstream: /\[ok\] <label>/, /\[missing\] <label>/, /\[invalid\] <label>/, /Archify is ready\./,
++//       new RegExp(`Demo ready: <output>`), /Next: open the HTML in your browser/.
++//     fork: /\s+ok,<label>/, /\s+missing,<label>/, /\s+invalid,<label>/, /status: ready/,
++//       new RegExp(`output: <output>`), /next: open the HTML in a browser/ — reason: the restored
++//       fork TOON output (b87c0b4) replaced the bracket-prefixed doctor rows and `Demo ready` text.
++//   output-path.test.mjs 'doctor reports a missing output-path safety runtime ...'
++//     upstream: /\[missing\] Output path safety runtime/ -> fork: /missing,Output path safety runtime/
++//       (same restored doctor TOON output).
++//   cursor-onboarding.test.mjs 'the zero-dependency archive works from the canonical Cursor-visible agent path'
++//     upstream: the packaged archive's `doctor` output must match /Archify is ready\./.
++//     fork: /status: ready/ (same restored TOON doctor output); the assertion reads the packaged
++//       archify.zip, so it only failed once ca71c6b rebuilt that archive with the restored CLI.
++// Fix rounds: 391e908 host-agnostic parse + self-hosted links, 4190127 http for self-hosted /
++// https for public forges, 08e6a48 exact diagnostic codes, b98f1c8 .git+case normalization and
++// the two assertion changes above, d294ff8 .git stripped in identity and emitted links, fd78d99
++// provider narrowed back to upstream's enum.
++//
++// Real internal-forge verification (CI cannot reach this host). h-machine Gitea:
++// http://192.168.1.4:3000/admin/seed-hunter, revision d2676d0b9d83fcbe5905277eb2aa7ed3b6fcd9c9
++//   git clone http://192.168.1.4:3000/admin/seed-hunter.git
++//   (a) origin `.git` clone_url + authored browser_url -> validate exit 0 (9/9 checks)
++//   (b) authored url carrying `.git` -> href emitted without `.git`
++//   (c) origin /Admin/Seed-Hunter.git -> validate exit 0
++// emitted href: http://192.168.1.4:3000/admin/seed-hunter/blob/<revision>/src/analyze.ts#L1-L20
++// commands + raw output: /Users/onyx/code/firstmate/data/fork-sync-conflict-archify/e2e-gitea.md
++
++test('self-hosted HTTP forges normalize clone suffixes/case and reject declared providers', () => {
++  const data = fixture();
++  const url = 'http://192.168.1.4:3000/admin/seed-hunter';
++  for (const origin of [`${url}.git`, 'http://192.168.1.4:3000/Admin/Seed-Hunter.git']) {
++    data.diagram.meta.repository = { url, revision: data.revision };
++    git(data.root, 'remote', 'set-url', 'origin', origin);
++    fs.writeFileSync(data.input, JSON.stringify(data.diagram));
++    const validated = run(['validate', 'architecture', data.input, '--repo-root', data.root, '--json']);
++    assert.equal(validated.status, 0, `${origin}: ${validated.stderr || validated.stdout}`);
++    const output = path.join(data.root, 'self-hosted.html');
++    const delivered = run(['deliver', 'architecture', data.input, output, '--repo-root', data.root, '--json']);
++    assert.equal(delivered.status, 0, delivered.stderr || delivered.stdout);
++    const evidence = evidencePayload(fs.readFileSync(output, 'utf8'));
++    assert.equal(evidence.repository.href, `${url}/tree/${data.revision}`);
++    assert.equal(evidence.nodes.users[0].href, `${url}/blob/${data.revision}/src/router.js#L1-L3`);
++    assert.equal(evidence.nodes.users[1].href, `${url}/blob/${data.revision}/src/store.js#L1`);
++  }
++  for (const [provider, code] of [['gitea', 'schema/enum'], ['github', 'repository-evidence/provider-invalid']]) {
++    data.diagram.meta.repository = { url: `${url}.git`, revision: data.revision, provider };
++    git(data.root, 'remote', 'set-url', 'origin', `${url}.git`);
++    fs.writeFileSync(data.input, JSON.stringify(data.diagram));
++    const rejected = run(['validate', 'architecture', data.input, '--repo-root', data.root, '--json']);
++    assert.equal(rejected.status, 1, provider);
++    assert.ok(JSON.parse(rejected.stdout).diagnostics.some((entry) => entry.code === code), `${provider}: ${rejected.stdout}`);
++  }
++});
++
++test('public forges still require canonical HTTPS without a custom port', () => {
++  const data = fixture();
++  for (const url of ['http://github.com/example/evidence-repo', 'https://github.com:8443/example/evidence-repo']) {
++    data.diagram.meta.repository = { url, revision: data.revision };
++    git(data.root, 'remote', 'set-url', 'origin', url);
++    fs.writeFileSync(data.input, JSON.stringify(data.diagram));
++    const result = run(['validate', 'architecture', data.input, '--repo-root', data.root, '--json']);
++    assert.equal(result.status, 1, url);
++    assert.ok(JSON.parse(result.stdout).diagnostics.some(({ code }) => code === 'repository-evidence/links-unsupported'), result.stdout);
++  }
++});
++
+ test('local-only evidence verifies HTTP self-hosted origins without generating links', () => {
+   const data = fixture();
+   data.diagram.meta.repository = {
+@@ -142,14 +252,13 @@ for (const [name, url, origin] of [
+   });
+ }
+ 
+-test('local-only rejects different hosts, paths, path case, endpoints and guessed prefixes', () => {
++test('local-only rejects different hosts, paths, endpoints and guessed prefixes', () => {
+   const data = fixture();
+   const output = path.join(data.root, 'trusted.html');
+   fs.writeFileSync(output, 'trusted previous artifact');
+   for (const [url, remote] of [
+     ['https://git.internal/Team/repo', 'https://other.internal/Team/repo'],
+     ['https://git.internal/Team/repo', 'https://git.internal/Team/other'],
+-    ['https://git.internal/Team/repo', 'https://git.internal/team/repo'],
+     ['https://git.internal/Team/repo', 'http://git.internal/Team/repo'],
+     ['https://git.internal/Team/repo', 'https://git.internal:8443/Team/repo'],
+     ['ssh://git@git.internal:2222/Team/repo', 'ssh://git@git.internal:2223/Team/repo'],
+@@ -159,8 +268,6 @@ test('local-only rejects different hosts, paths, path case, endpoints and guesse
+     ['https://git.internal/Team/repo', 'https://git.internal/Team/ignored/../repo'],
+     ['https://git.internal/Team/repo', 'git@git.internal:Team/repo'],
+     ['https://git.internal/Team/repo', 'ssh://git@git.internal/Team/repo'],
+-    ['git@git.internal:Team/repo', 'git@git.internal:Team/repo.git'],
+-    ['http://git.internal/Team/repo', 'http://git.internal/Team/repo.git'],
+   ]) {
+     data.diagram.meta.repository = { url, revision: data.revision, link_mode: 'local-only' };
+     fs.writeFileSync(data.input, JSON.stringify(data.diagram));
+@@ -206,25 +313,27 @@ test('local-only preserves root, origin, commit, blob, path and line checks', ()
+   assert.match(result.stdout, /must have an origin/);
+ });
+ 
+-test('unsupported web providers and invalid authored addresses fail without exposing credentials', () => {
++test('unsupported web links and invalid authored addresses fail without exposing credentials', () => {
+   const data = fixture();
+-  for (const repository of [
+-    { url: 'https://git.internal/team/repo' },
+-    { url: 'https://gitee.com/team/repo', provider: 'github' },
+-    { url: 'https://git.internal/team/repo', provider: 'gitee' },
+-    { url: 'https://user:SYNTHETIC_TOKEN@gitee.com/team/repo' },
+-    { url: 'https://gitee.com/team/repo?token=SYNTHETIC_TOKEN' },
+-    { url: 'https://gitee.com/team/repo#SYNTHETIC_TOKEN' },
+-    { url: 'https://gitee.com/team/%2e%2e/repo' },
+-    { url: 'https://gitee.com/team%2Frepo' },
+-    { url: 'file:///tmp/repo', link_mode: 'local-only' },
+-    { url: 'javascript:alert(1)', link_mode: 'local-only' },
+-    { link_mode: 'local-only' },
++  for (const { repository, code } of [
++    { repository: { url: 'ssh://git@git.internal/team/repo' }, code: 'repository-evidence/links-unsupported' },
++    { repository: { url: 'https://git.internal/Platform/Services/repo' }, code: 'repository-evidence/links-unsupported' },
++    { repository: { url: 'https://gitee.com/team/repo', provider: 'github' }, code: 'repository-evidence/provider-invalid' },
++    { repository: { url: 'https://git.internal/team/repo', provider: 'gitee' }, code: 'repository-evidence/provider-invalid' },
++    { repository: { url: 'https://user:SYNTHETIC_TOKEN@gitee.com/team/repo' }, code: 'repository-evidence/url-invalid' },
++    { repository: { url: 'https://gitee.com/team/repo?token=SYNTHETIC_TOKEN' }, code: 'repository-evidence/url-invalid' },
++    { repository: { url: 'https://gitee.com/team/repo#SYNTHETIC_TOKEN' }, code: 'repository-evidence/url-invalid' },
++    { repository: { url: 'https://gitee.com/team/%2e%2e/repo' }, code: 'repository-evidence/url-invalid' },
++    { repository: { url: 'https://gitee.com/team%2Frepo' }, code: 'repository-evidence/url-invalid' },
++    { repository: { url: 'file:///tmp/repo', link_mode: 'local-only' }, code: 'repository-evidence/url-invalid' },
++    { repository: { url: 'javascript:alert(1)', link_mode: 'local-only' }, code: 'repository-evidence/url-invalid' },
++    { repository: { link_mode: 'local-only' }, code: 'schema/required' },
+   ]) {
+     data.diagram.meta.repository = { revision: data.revision, ...repository };
+     fs.writeFileSync(data.input, JSON.stringify(data.diagram));
+     const result = run(['validate', 'architecture', data.input, '--repo-root', data.root, '--json']);
+     assert.equal(result.status, 1, JSON.stringify(repository));
++    assert.ok(JSON.parse(result.stdout).diagnostics.some((entry) => entry.code === code), `${JSON.stringify(repository)}: ${result.stdout}`);
+     assert.doesNotMatch(result.stdout + result.stderr, /SYNTHETIC_TOKEN/);
+   }
+ });

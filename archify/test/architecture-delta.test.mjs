@@ -277,7 +277,7 @@ test('portable compare retains link settings and uses the same repository identi
   assert.equal(canonical.meta.repository.url, 'https://git.internal/Team/Services/repo.git');
   assert.equal(compareArchitecture(base, head, { baseVerified: true, headVerified: true }).proofLevel, 'revision-pinned');
   head.meta.repository.url = 'https://git.internal/team/Services/repo.git';
-  assert.equal(compareArchitecture(base, head, { baseVerified: true, headVerified: true }).proofLevel, 'revision-pinned');
+  assert.throws(() => compareArchitecture(base, head), (error) => error.code === 'delta/repository-mismatch');
   base.meta.repository = { url: 'https://gitee.com/Team/repo', revision: 'a'.repeat(40), provider: 'gitee' };
   assert.equal(JSON.parse(canonicalArchitectureJson(base)).meta.repository.provider, 'gitee');
 });

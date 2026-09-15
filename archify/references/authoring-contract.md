@@ -194,13 +194,10 @@ blob, and valid line range are required in every link mode. Verification is
 local and makes no remote requests; it establishes neither public availability
 nor the current reader's access rights.
 
-`link_mode` defaults to `web`. Repository URLs with an `owner/repository` path
-generate revision-pinned links: public `github.com` and `gitee.com` addresses
-must use HTTPS, while self-hosted forges such as Gitea or GitLab also accept
-HTTP. `github.com` and `gitee.com` select the provider automatically, and an
-optional `provider` (`"github"` or `"gitee"`) must agree with those hosts; omit
-`provider` on any other host. Existing GitHub declarations and default delivery
-receipt fields remain compatible.
+`link_mode` defaults to `web`. GitHub and Gitee HTTPS repository URLs generate
+revision-pinned links; their public hosts select the provider automatically.
+Optional `provider: "github"` or `"gitee"` must agree with the host. Existing
+GitHub declarations and default delivery receipt fields remain compatible.
 
 ```json
 {
@@ -210,8 +207,7 @@ receipt fields remain compatible.
 }
 ```
 
-For a repository that cannot publish web links (an SSH-only address, a nested
-namespace, or a host readers cannot reach), select `link_mode: "local-only"`. The
+For an internal or unsupported forge, select `link_mode: "local-only"`. The
 Viewer retains SRC markers, searchable file paths, line ranges, and revision
 labels without repository or source hyperlinks. The evidence receipt adds
 `linkMode: "local-only"`. `url` remains required as the expected origin identity;
@@ -229,19 +225,18 @@ origin is not supported.
 Local-only accepts HTTP(S), `git@host:path`, and `ssh://git@host[:port]/path`
 addresses, including nested namespaces. Declare a credential-free address;
 HTTP(S) credentials on the checkout's origin are ignored for identity and
-redacted from diagnostics. Hostnames and repository paths compare
-case-insensitively, and one terminal `.git` clone suffix normalizes away for
-every host, including the links web mode emits. A trailing slash normalizes
-away as well. GitHub and Gitee additionally match standard HTTPS/443 with Git
-SSH/22. For other hosts the transport, port, and remote-relative versus absolute
-path must match. For example, `git@host:Team/repo` differs from
+redacted from diagnostics. Hostnames compare case-insensitively; repository
+paths retain case except for the existing GitHub behavior. A trailing slash
+normalizes away. Only GitHub and Gitee normalize a terminal `.git` and match
+standard HTTPS/443 with Git SSH/22. For other hosts, use the actual clone address:
+transport, port, `.git` suffix, and remote-relative versus absolute paths must
+match. For example, `git@host:Team/repo` differs from
 `ssh://git@host/Team/repo`; `git@host:/Team/repo` matches the latter. SCP-style
 paths preserve literal percent escapes, while URI paths decode them. SSH host
 aliases and forge-specific browse/clone prefixes are not guessed.
-Web links assume a forge browse shape like GitHub's
-`/blob/<revision>/<path>#L<start>-L<end>` (Gitee uses `#L<start>-<end>`) and are
-never checked against the remote. Use `local-only` for SSH addresses, nested
-namespaces, and any forge whose link shape differs.
+GitLab/Gitea/Forgejo/Bitbucket web links are not implemented in this version;
+use local-only until a tested link provider is available. Unknown web providers
+fail with a diagnostic rather than emitting a guessed link.
 
 ## Hand-placed fallback
 

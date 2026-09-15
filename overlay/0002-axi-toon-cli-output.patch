@@ -1,0 +1,236 @@
+diff --git a/archify/bin/archify.mjs b/archify/bin/archify.mjs
+index 5828c43..106e99f 100755
+--- a/archify/bin/archify.mjs
++++ b/archify/bin/archify.mjs
+@@ -12,6 +12,30 @@ const skillRoot = path.resolve(__dirname, '..');
+ 
+ const TYPES = new Set(['architecture', 'workflow', 'sequence', 'dataflow', 'lifecycle']);
+ 
++function getVersion() {
++  try {
++    const pkg = JSON.parse(fs.readFileSync(path.join(skillRoot, 'package.json'), 'utf8'));
++    return pkg.version || '0.0.0';
++  } catch {
++    return '0.0.0';
++  }
++}
++
++const HOME_VIEW = `Create self-contained, interactive HTML diagrams from typed JSON specs.
++
++archify[16]{type,command,description}:
++  architecture,render,"render a component/service infrastructure map"
++  workflow,render,"process, approval gate, runbook, CI/CD"
++  sequence,render,"API call chain, request lifecycle, async trace"
++  dataflow,render,"pipeline, ETL/ELT, lineage, governance"
++  lifecycle,render,"state/status transition, retry, terminal state"
++
++help[3]:
++  Run \`archify validate <type> <input.json> --quality showcase\` to check a candidate
++  Run \`archify guide "<scenario>" --json\` to pick the right diagram type
++  Run \`archify doctor\` to verify the install
++`;
++
+ function usage() {
+   return `Usage:
+   archify render <type> <input.json> [output.html] [--quality standard|showcase] [--repo-root path (architecture only)]
+@@ -712,9 +736,7 @@ async function commandCompare(args) {
+     commitComparePair({ htmlCandidate, receiptCandidate, outputPath, receiptPath, stagingDirectory });
+     if (options.json) console.log(JSON.stringify(finalReceipt, null, 2));
+     else {
+-      console.log(`compared architecture ${outputPath}`);
+-      console.log(`${finalReceipt.validation.checksPassed}/${finalReceipt.validation.checkCount} checks; completeness ${finalReceipt.completeness}; ${finalReceipt.proofLevel}; sha256 ${finalReceipt.artifact.sha256.slice(0, 12)}`);
+-      console.log(`receipt ${receiptPath}`);
++      console.log(`compare:\n  output: ${outputPath}\n  checks: ${finalReceipt.validation.checksPassed}/${finalReceipt.validation.checkCount}\n  completeness: ${finalReceipt.completeness}\n  proof: ${finalReceipt.proofLevel}\n  sha256: ${finalReceipt.artifact.sha256.slice(0, 12)}\n  receipt: ${receiptPath}`);
+     }
+   } catch (error) {
+     if (error instanceof ArchitectureDeltaError) {
+@@ -1175,12 +1197,11 @@ async function commandDeliver(args) {
+     if (json) {
+       console.log(JSON.stringify(receipt, null, 2));
+     } else {
+-      console.log(`delivered ${type} ${outputPath}`);
+       const engineering = receipt.validation.engineeringProfile
+-        ? `; engineering ${receipt.validation.engineeringProfile}: pass`
++        ? `\n  engineering: pass`
+         : '';
+-      console.log(`${receipt.validation.checksPassed}/${receipt.validation.checkCount} artifact checks; composition ${receipt.validation.compositionProfile}: ${receipt.validation.compositionStatus}${engineering}; sha256 ${receipt.artifact.sha256.slice(0, 12)}`);
+-      if (receipt.open?.status === 'opened') console.log(`opened ${outputPath}`);
++      console.log(`delivery:\n  type: ${type}\n  output: ${outputPath}\n  checks: ${receipt.validation.checksPassed}/${receipt.validation.checkCount}\n  profile: ${receipt.validation.compositionProfile}\n  status: ${receipt.validation.compositionStatus}${engineering}\n  sha256: ${receipt.artifact.sha256.slice(0, 12)}`);
++      if (receipt.open?.status === 'opened') console.log(`  opened: true`);
+     }
+   } finally {
+     try {
+@@ -1275,7 +1296,8 @@ async function commandVisualCheck(args) {
+     console.log(JSON.stringify(result.receipt, null, 2));
+   } else {
+     console.log(`automated browser evidence ${result.receipt.status}: ${result.receipt.artifact.path}`);
+-    console.log(`visual-check containment ${result.receipt.containment.status}; captures ${result.receipt.captures.status}; perceptual visual review pending`);
++    console.log(`visual-check containment ${result.receipt.containment.status}; captures ${result.receipt.captures.status}`);
++    console.log('perceptual visual review pending');
+     console.log(`receipt ${path.join(path.dirname(result.receipt.artifact.path), result.receipt.sidecars.receipt)}`);
+     if (result.receipt.captures.contactSheet) {
+       console.log(`contact sheet ${path.join(path.dirname(result.receipt.artifact.path), result.receipt.captures.contactSheet)}`);
+@@ -1413,16 +1435,16 @@ async function commandDoctor(args) {
+     });
+   }
+ 
+-  console.log('Archify doctor\n');
++  console.log(`doctor[${checks.length}]{status,label}:`);
+   for (const check of checks) {
+-    console.log(`[${check.ok ? 'ok' : (check.failureLabel || 'missing')}] ${check.label}`);
++    console.log(`  ${check.ok ? 'ok' : (check.failureLabel || 'missing')},${check.label}`);
+   }
+ 
+   const nodeFailed = checks[0].ok ? 0 : 1;
+   const missingFiles = checks.reduce((count, check) => count + check.missing, 0);
+   const invalidRuntime = checks.reduce((count, check) => count + (check.invalid || 0), 0);
+   if (nodeFailed === 0 && missingFiles === 0 && invalidRuntime === 0) {
+-    console.log('\nArchify is ready.');
++    console.log('status: ready');
+     return;
+   }
+ 
+@@ -1561,9 +1583,8 @@ function commandDemo(args) {
+   const result = runNode([rendererPath('architecture'), input, output]);
+   if (result.status !== 0) exitFrom(result);
+ 
+-  console.log(`\nDemo ready: ${output}`);
+-  console.log('Next: open the HTML in your browser, then render your own diagram:');
+-  console.log('  archify render architecture <input.json> <output.html>');
++  console.log(`demo:\n  output: ${output}\n  next: open the HTML in a browser, then render your own diagram`);
++  console.log('  run: archify render architecture <input.json> <output.html>');
+ }
+ 
+ function migrationPathDiagnostics(error, sourcePath, destinationPath) {
+@@ -1868,9 +1889,9 @@ async function commandMigrate(args) {
+     });
+     if (options.json) console.log(JSON.stringify(report, null, 2));
+     else if (sourceDocument.schema_version === 1) {
+-      console.log(`migrated workflow schema v1→v2: ${sourcePath} → ${destinationPath}`);
++      console.log(`migration:\n  operation: migrate\n  from: ${sourcePath}\n  to: ${destinationPath}\n  schema: v1→v2`);
+     } else {
+-      console.log(`verified workflow schema v2 migration: ${sourcePath} → ${destinationPath}`);
++      console.log(`migration:\n  operation: verify\n  from: ${sourcePath}\n  to: ${destinationPath}\n  schema: v2`);
+     }
+   } catch (error) {
+     const migrationDiagnostics = Array.isArray(error?.archifyDiagnostics)
+@@ -2020,9 +2041,9 @@ function commandValidate(args) {
+           }, null, 2));
+         } else {
+           const engineering = engineeringProfile
+-            ? `; engineering ${engineeringProfile}: pass`
++            ? `\n  engineering: pass`
+             : '';
+-          console.log(`ok ${type} ${path.resolve(input)} (${result.checks.length} artifact checks; composition ${result.composition.profile}: ${result.composition.summary.errors} errors, ${result.composition.summary.warnings} warnings${engineering})`);
++          console.log(`validation:\n  type: ${type}\n  input: ${path.resolve(input)}\n  checks: ${result.checks.length}/${result.checks.length}\n  profile: ${result.composition.profile}\n  errors: ${result.composition.summary.errors}\n  warnings: ${result.composition.summary.warnings}${engineering}`);
+         }
+       }
+     }
+@@ -2035,9 +2056,18 @@ function commandValidate(args) {
+ 
+ const [command, ...args] = process.argv.slice(2);
+ 
++// AXI: fast version probe before any heavy work. -v, -V, --version -> bare version, exit 0.
++if (command === '--version' || command === '-v' || command === '-V') {
++  console.log(getVersion());
++  process.exit(0);
++}
++
+ try {
+   switch (command) {
+     case undefined:
++      // AXI content-first: no-args shows live state + next steps, not a usage manual.
++      console.log(HOME_VIEW);
++      break;
+     case '-h':
+     case '--help':
+     case 'help':
+@@ -2089,7 +2119,10 @@ try {
+       commandDemo(args);
+       break;
+     default:
+-      fail(`Unknown command "${command}".\n\n${usage()}`);
++      // AXI: fail loud on unknown command with self-correcting help (exit 2).
++      console.error(`error: Unknown command \`${command}\``);
++      console.error('help: Run `archify --help` to list commands.');
++      process.exitCode = 2;
+   }
+ } catch (error) {
+   if (!error.archifyArgument) throw error;
+diff --git a/archify/test/cli.test.mjs b/archify/test/cli.test.mjs
+index de2fd91..9a97f74 100644
+--- a/archify/test/cli.test.mjs
++++ b/archify/test/cli.test.mjs
+@@ -88,17 +88,17 @@ test('cli: help lists commands and diagram types', () => {
+ test('cli: doctor reports a complete installation is ready', () => {
+   const result = run(['doctor']);
+   assert.equal(result.status, 0, result.stderr);
+-  assert.match(result.stdout, /\[ok\] Node\.js v\d+/);
+-  assert.match(result.stdout, /\[ok\] Core template/);
+-  assert.match(result.stdout, /\[ok\] Example renderer/);
+-  assert.match(result.stdout, /\[ok\] Live preview runtime/);
+-  assert.match(result.stdout, /\[ok\] Scenario recipe guide/);
+-  assert.match(result.stdout, /\[ok\] Progressive authoring references/);
+-  assert.match(result.stdout, /\[ok\] Architecture compare runtime and proof fixtures/);
+-  assert.match(result.stdout, /\[ok\] Standalone schema validators/);
+-  assert.match(result.stdout, /\[ok\] architecture renderer, schema, and example/);
+-  assert.match(result.stdout, /\[ok\] lifecycle renderer, schema, and example/);
+-  assert.match(result.stdout, /Archify is ready\./);
++  assert.match(result.stdout, /\s+ok,Node\.js v\d+/);
++  assert.match(result.stdout, /\s+ok,Core template/);
++  assert.match(result.stdout, /\s+ok,Example renderer/);
++  assert.match(result.stdout, /\s+ok,Live preview runtime/);
++  assert.match(result.stdout, /\s+ok,Scenario recipe guide/);
++  assert.match(result.stdout, /\s+ok,Progressive authoring references/);
++  assert.match(result.stdout, /\s+ok,Architecture compare runtime and proof fixtures/);
++  assert.match(result.stdout, /\s+ok,Standalone schema validators/);
++  assert.match(result.stdout, /\s+ok,architecture renderer, schema, and example/);
++  assert.match(result.stdout, /\s+ok,lifecycle renderer, schema, and example/);
++  assert.match(result.stdout, /status: ready/);
+ });
+ 
+ test('cli: doctor identifies an incomplete installation', () => {
+@@ -113,9 +113,9 @@ test('cli: doctor identifies an incomplete installation', () => {
+   });
+ 
+   assert.equal(result.status, 1);
+-  assert.match(result.stdout, /\[missing\] Core template/);
+-  assert.match(result.stdout, /\[missing\] Scenario recipe guide/);
+-  assert.match(result.stdout, /\[missing\] workflow renderer, schema, and example/);
++  assert.match(result.stdout, /\s+missing,Core template/);
++  assert.match(result.stdout, /\s+missing,Scenario recipe guide/);
++  assert.match(result.stdout, /\s+missing,workflow renderer, schema, and example/);
+   assert.match(result.stderr, /Archify is not ready: \d+ required files? missing\./);
+ });
+ 
+@@ -130,7 +130,7 @@ test('cli: doctor rejects a corrupt standalone validator', () => {
+   });
+ 
+   assert.equal(result.status, 1);
+-  assert.match(result.stdout, /\[invalid\] Standalone schema validators/);
++  assert.match(result.stdout, /\s+invalid,Standalone schema validators/);
+   assert.match(result.stderr, /Archify is not ready: 1 runtime check failed\./);
+ });
+ 
+@@ -221,8 +221,8 @@ test('cli: demo creates a ready-to-open diagram in a chosen directory', () => {
+   assert.equal(result.status, 0, result.stderr);
+   assert.equal(fs.existsSync(output), true);
+   assert.match(fs.readFileSync(output, 'utf8'), /Sample Web App Diagram/);
+-  assert.match(result.stdout, new RegExp(`Demo ready: ${output.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+-  assert.match(result.stdout, /Next: open the HTML in your browser/);
++  assert.match(result.stdout, new RegExp(`output: ${output.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
++  assert.match(result.stdout, /next: open the HTML in a browser/);
+   assert.match(result.stdout, /archify render architecture/);
+ });
+ 
+diff --git a/archify/test/output-path.test.mjs b/archify/test/output-path.test.mjs
+index 51a5451..9e21e17 100644
+--- a/archify/test/output-path.test.mjs
++++ b/archify/test/output-path.test.mjs
+@@ -583,5 +583,5 @@ test('doctor reports a missing output-path safety runtime in an installed skill'
+   });
+ 
+   assert.equal(result.status, 1);
+-  assert.match(result.stdout, /\[missing\] Output path safety runtime/);
++  assert.match(result.stdout, /missing,Output path safety runtime/);
+ });

@@ -94,25 +94,21 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
   if (!location) {
     evidenceFailure('repository-evidence/url-invalid', '/meta/repository/url must be a credential-free HTTP(S) or Git SSH repository address without query, fragment, or dot segments.', {
       subject: { path: '/meta/repository/url' },
-      supportedFixes: ['declare the matching credential-free repository address; internal HTTP(S) forges can use link_mode: web, and local-only still validates the same address'],
+      supportedFixes: ['declare the matching repository address without credentials; use link_mode: local-only for internal repositories'],
     });
   }
   const linkMode = repository.link_mode ?? 'web';
   if (!['web', 'local-only'].includes(linkMode)) evidenceFailure('repository-evidence/link-mode-invalid', 'Repository link_mode must be web or local-only.');
-  if (repository.provider !== undefined && repository.provider !== location.provider) {
-    evidenceFailure('repository-evidence/provider-invalid', 'Repository provider must match the host it names.', {
+  if (repository.provider !== undefined && (!['github', 'gitee'].includes(repository.provider) || repository.provider !== location.provider)) {
+    evidenceFailure('repository-evidence/provider-invalid', 'Repository provider must match its supported public host (github.com or gitee.com).', {
       subject: { path: '/meta/repository/provider' },
-      supportedFixes: ['use the provider matching the repository host, or omit provider'],
+      supportedFixes: ['use the matching provider or omit provider and select link_mode: local-only'],
     });
   }
-  const supportedProtocol = location.provider === null
-    ? location.protocol === 'http:' || location.protocol === 'https:'
-    : location.protocol === 'https:';
-  const supportedEndpoint = location.provider === null || location.endpoint === 'standard';
-  if (linkMode === 'web' && (!supportedProtocol || !supportedEndpoint || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(location.path))) {
-    evidenceFailure('repository-evidence/links-unsupported', 'Web source links require a canonical public HTTPS URL or a self-hosted HTTP(S) owner/repository URL.', {
+  if (linkMode === 'web' && (!location.provider || location.protocol !== 'https:' || location.endpoint !== 'standard' || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(location.path))) {
+    evidenceFailure('repository-evidence/links-unsupported', 'Web source links require a canonical GitHub or Gitee HTTPS owner/repository URL.', {
       subject: { path: '/meta/repository/url' },
-      supportedFixes: ['use the repository URL that serves the sources, or select link_mode: local-only to retain local verification without web links'],
+      supportedFixes: ['use a canonical GitHub or Gitee URL, or select link_mode: local-only to retain local verification without web links'],
     });
   }
   if (!repoRootInput) {
@@ -152,7 +148,6 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
   }
 
   const revision = repository.revision.toLowerCase();
-  const linkUrl = location.url.replace(/\.git$/i, '');
   const commit = runGit(realRoot, ['cat-file', '-e', `${revision}^{commit}`]);
   if (commit.status !== 0) {
     evidenceFailure('repository-evidence/revision-unavailable', `Evidence revision ${revision} is not available in the local repository.`, {
@@ -215,7 +210,7 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
           });
         }
       }
-      verified.push({ ...source, ...(linkMode === 'web' ? { href: repositorySourceHref(location.provider, linkUrl, revision, source) } : {}) });
+      verified.push({ ...source, ...(linkMode === 'web' ? { href: repositorySourceHref(location.provider, location.url, revision, source) } : {}) });
       referenceCount += 1;
     }
     nodes[component.id] = verified;
@@ -231,11 +226,11 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
     schemaVersion: 1,
     verified: true,
     repository: {
-      url: linkUrl,
+      url: location.url,
       revision,
       shortRevision: revision.slice(0, 7),
-      label: location.provider === 'github' ? location.path : linkUrl.replace(/^(?:https?:\/\/|ssh:\/\/git@|git@)/, ''),
-      ...(linkMode === 'web' ? { href: `${linkUrl}/tree/${revision}` } : { linkMode }),
+      label: location.provider === 'github' ? location.path : location.url.replace(/^(?:https?:\/\/|ssh:\/\/git@|git@)/, ''),
+      ...(linkMode === 'web' ? { href: `${location.url}/tree/${revision}` } : { linkMode }),
     },
     referenceCount,
     nodes,

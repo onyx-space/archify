@@ -76,116 +76,6 @@ test('Gitee evidence generates provider-specific revision and line links', () =>
   }
 });
 
-// Fork-restoration record for the upstream/main sync (fork main 1f1323e x upstream 50e2dcc).
-// The five fork-only commits dropped by that merge were re-applied onto upstream's rewrite:
-//   c3649a9 version fast-path / content-first home / fail-loud unknown command
-//     preserved: archify/bin/archify.mjs:15,24,2059,2068,2122
-//   b87c0b4 TOON output for validate/deliver/compare/migrate/doctor/demo
-//     preserved: archify/bin/archify.mjs:739,1203,1300,1438,1447,1586,1892,2046
-//   530ce3c zh-CN authoring default, preserved: archify/SKILL.md:83
-//   767f51b arbitrary git hosts for repository evidence
-//     host-agnostic parse: archify/renderers/shared/repository-location.mjs:28
-//     self-hosted HTTP links: archify/renderers/shared/repository-evidence.mjs:108-117
-//     .git suffix + owner/repo case: repository-location.mjs:30-40, repository-evidence.mjs:155
-//     provider kept narrow: upstream's github/gitee enum stays at
-//     archify/schemas/architecture.schema.json:33, and repository-evidence.mjs:102 rejects a
-//     declared provider on a self-hosted host (upstream host-match check, no relaxed guard).
-//     schema url pattern NOT reinstated: upstream moved authored-address shape checking into
-//     parseRepositoryRemote (repository-evidence/url-invalid), which is host-agnostic and
-//     already rejects credentials, query, fragment and dot segments. The fork regex only
-//     allowed https?://host/owner/repo and would drop upstream's ssh://, git@host:path and
-//     nested-namespace local-only addresses, so the code check is the equivalent restore.
-//   cb9db45 authoredSlug string fix: obsolete, matching now compares the parser identity
-//     string (repository-evidence.mjs:145) instead of the fork's {host,slug} object.
-// One fork behavior is intentionally not restored: the fork slug match ignored the host,
-// while this sync keeps upstream's strict identity (host, endpoint, path kind, owner/repo).
-//
-// Upstream test assertions changed by the restore (upstream -> fork, and why):
-//   repository-evidence.test.mjs 'local-only rejects different hosts, paths, path case, endpoints...'
-//     upstream: Team/repo vs team/repo, git@...:Team/repo vs git@...:Team/repo.git and
-//       http://.../Team/repo vs http://.../Team/repo.git must reject (byte-exact case + .git).
-//     fork: those three pairs removed (title drops 'path case') because the restore normalizes
-//       repository-path case and one terminal .git, so the pairs now match; other cases unchanged.
-//   architecture-delta.test.mjs 'portable compare retains link settings...'
-//     upstream: head url .../team/Services/repo.git vs base .../Team/Services/repo.git must throw
-//       'delta/repository-mismatch'.
-//     fork: assert.equal(compareArchitecture(...).proofLevel, 'revision-pinned') because identity
-//       is now case-insensitive; the canonical-url assertion keeps upstream's `.git` value
-//       (an intermediate flip in b98f1c8 was reverted by d294ff8).
-//   repository-evidence.test.mjs 'unsupported web providers...' -> 'unsupported web links...'
-//     upstream: exit 1 alone per case; `{ url: 'https://git.internal/team/repo', provider: 'gitee' }`
-//       already exited 1 there, because upstream's provider guard required the declared provider to
-//       equal the host-derived one and rejected it as repository-evidence/provider-invalid.
-//     fork: each case asserts its exact diagnostic code instead of bare exit 1. The self-hosted
-//       provider case was dropped by 08e6a48 while the relaxed guard accepted it (it then failed
-//       later as origin-mismatch); fd78d99 restored the strict guard, so the case is back with code
-//       repository-evidence/provider-invalid.
-//   cli.test.mjs 'cli: doctor ...' (3 tests) and 'cli: demo ...'
-//     upstream: /\[ok\] <label>/, /\[missing\] <label>/, /\[invalid\] <label>/, /Archify is ready\./,
-//       new RegExp(`Demo ready: <output>`), /Next: open the HTML in your browser/.
-//     fork: /\s+ok,<label>/, /\s+missing,<label>/, /\s+invalid,<label>/, /status: ready/,
-//       new RegExp(`output: <output>`), /next: open the HTML in a browser/ — reason: the restored
-//       fork TOON output (b87c0b4) replaced the bracket-prefixed doctor rows and `Demo ready` text.
-//   output-path.test.mjs 'doctor reports a missing output-path safety runtime ...'
-//     upstream: /\[missing\] Output path safety runtime/ -> fork: /missing,Output path safety runtime/
-//       (same restored doctor TOON output).
-//   cursor-onboarding.test.mjs 'the zero-dependency archive works from the canonical Cursor-visible agent path'
-//     upstream: the packaged archive's `doctor` output must match /Archify is ready\./.
-//     fork: /status: ready/ (same restored TOON doctor output); the assertion reads the packaged
-//       archify.zip, so it only failed once ca71c6b rebuilt that archive with the restored CLI.
-// Fix rounds: 391e908 host-agnostic parse + self-hosted links, 4190127 http for self-hosted /
-// https for public forges, 08e6a48 exact diagnostic codes, b98f1c8 .git+case normalization and
-// the two assertion changes above, d294ff8 .git stripped in identity and emitted links, fd78d99
-// provider narrowed back to upstream's enum.
-//
-// Real internal-forge verification (CI cannot reach this host). h-machine Gitea:
-// http://192.168.1.4:3000/admin/seed-hunter, revision d2676d0b9d83fcbe5905277eb2aa7ed3b6fcd9c9
-//   git clone http://192.168.1.4:3000/admin/seed-hunter.git
-//   (a) origin `.git` clone_url + authored browser_url -> validate exit 0 (9/9 checks)
-//   (b) authored url carrying `.git` -> href emitted without `.git`
-//   (c) origin /Admin/Seed-Hunter.git -> validate exit 0
-// emitted href: http://192.168.1.4:3000/admin/seed-hunter/blob/<revision>/src/analyze.ts#L1-L20
-// commands + raw output: /Users/onyx/code/firstmate/data/fork-sync-conflict-archify/e2e-gitea.md
-
-test('self-hosted HTTP forges normalize clone suffixes/case and reject declared providers', () => {
-  const data = fixture();
-  const url = 'http://192.168.1.4:3000/admin/seed-hunter';
-  for (const origin of [`${url}.git`, 'http://192.168.1.4:3000/Admin/Seed-Hunter.git']) {
-    data.diagram.meta.repository = { url, revision: data.revision };
-    git(data.root, 'remote', 'set-url', 'origin', origin);
-    fs.writeFileSync(data.input, JSON.stringify(data.diagram));
-    const validated = run(['validate', 'architecture', data.input, '--repo-root', data.root, '--json']);
-    assert.equal(validated.status, 0, `${origin}: ${validated.stderr || validated.stdout}`);
-    const output = path.join(data.root, 'self-hosted.html');
-    const delivered = run(['deliver', 'architecture', data.input, output, '--repo-root', data.root, '--json']);
-    assert.equal(delivered.status, 0, delivered.stderr || delivered.stdout);
-    const evidence = evidencePayload(fs.readFileSync(output, 'utf8'));
-    assert.equal(evidence.repository.href, `${url}/tree/${data.revision}`);
-    assert.equal(evidence.nodes.users[0].href, `${url}/blob/${data.revision}/src/router.js#L1-L3`);
-    assert.equal(evidence.nodes.users[1].href, `${url}/blob/${data.revision}/src/store.js#L1`);
-  }
-  for (const [provider, code] of [['gitea', 'schema/enum'], ['github', 'repository-evidence/provider-invalid']]) {
-    data.diagram.meta.repository = { url: `${url}.git`, revision: data.revision, provider };
-    git(data.root, 'remote', 'set-url', 'origin', `${url}.git`);
-    fs.writeFileSync(data.input, JSON.stringify(data.diagram));
-    const rejected = run(['validate', 'architecture', data.input, '--repo-root', data.root, '--json']);
-    assert.equal(rejected.status, 1, provider);
-    assert.ok(JSON.parse(rejected.stdout).diagnostics.some((entry) => entry.code === code), `${provider}: ${rejected.stdout}`);
-  }
-});
-
-test('public forges still require canonical HTTPS without a custom port', () => {
-  const data = fixture();
-  for (const url of ['http://github.com/example/evidence-repo', 'https://github.com:8443/example/evidence-repo']) {
-    data.diagram.meta.repository = { url, revision: data.revision };
-    git(data.root, 'remote', 'set-url', 'origin', url);
-    fs.writeFileSync(data.input, JSON.stringify(data.diagram));
-    const result = run(['validate', 'architecture', data.input, '--repo-root', data.root, '--json']);
-    assert.equal(result.status, 1, url);
-    assert.ok(JSON.parse(result.stdout).diagnostics.some(({ code }) => code === 'repository-evidence/links-unsupported'), result.stdout);
-  }
-});
-
 test('local-only evidence verifies HTTP self-hosted origins without generating links', () => {
   const data = fixture();
   data.diagram.meta.repository = {
@@ -252,13 +142,14 @@ for (const [name, url, origin] of [
   });
 }
 
-test('local-only rejects different hosts, paths, endpoints and guessed prefixes', () => {
+test('local-only rejects different hosts, paths, path case, endpoints and guessed prefixes', () => {
   const data = fixture();
   const output = path.join(data.root, 'trusted.html');
   fs.writeFileSync(output, 'trusted previous artifact');
   for (const [url, remote] of [
     ['https://git.internal/Team/repo', 'https://other.internal/Team/repo'],
     ['https://git.internal/Team/repo', 'https://git.internal/Team/other'],
+    ['https://git.internal/Team/repo', 'https://git.internal/team/repo'],
     ['https://git.internal/Team/repo', 'http://git.internal/Team/repo'],
     ['https://git.internal/Team/repo', 'https://git.internal:8443/Team/repo'],
     ['ssh://git@git.internal:2222/Team/repo', 'ssh://git@git.internal:2223/Team/repo'],
@@ -268,6 +159,8 @@ test('local-only rejects different hosts, paths, endpoints and guessed prefixes'
     ['https://git.internal/Team/repo', 'https://git.internal/Team/ignored/../repo'],
     ['https://git.internal/Team/repo', 'git@git.internal:Team/repo'],
     ['https://git.internal/Team/repo', 'ssh://git@git.internal/Team/repo'],
+    ['git@git.internal:Team/repo', 'git@git.internal:Team/repo.git'],
+    ['http://git.internal/Team/repo', 'http://git.internal/Team/repo.git'],
   ]) {
     data.diagram.meta.repository = { url, revision: data.revision, link_mode: 'local-only' };
     fs.writeFileSync(data.input, JSON.stringify(data.diagram));
@@ -313,27 +206,25 @@ test('local-only preserves root, origin, commit, blob, path and line checks', ()
   assert.match(result.stdout, /must have an origin/);
 });
 
-test('unsupported web links and invalid authored addresses fail without exposing credentials', () => {
+test('unsupported web providers and invalid authored addresses fail without exposing credentials', () => {
   const data = fixture();
-  for (const { repository, code } of [
-    { repository: { url: 'ssh://git@git.internal/team/repo' }, code: 'repository-evidence/links-unsupported' },
-    { repository: { url: 'https://git.internal/Platform/Services/repo' }, code: 'repository-evidence/links-unsupported' },
-    { repository: { url: 'https://gitee.com/team/repo', provider: 'github' }, code: 'repository-evidence/provider-invalid' },
-    { repository: { url: 'https://git.internal/team/repo', provider: 'gitee' }, code: 'repository-evidence/provider-invalid' },
-    { repository: { url: 'https://user:SYNTHETIC_TOKEN@gitee.com/team/repo' }, code: 'repository-evidence/url-invalid' },
-    { repository: { url: 'https://gitee.com/team/repo?token=SYNTHETIC_TOKEN' }, code: 'repository-evidence/url-invalid' },
-    { repository: { url: 'https://gitee.com/team/repo#SYNTHETIC_TOKEN' }, code: 'repository-evidence/url-invalid' },
-    { repository: { url: 'https://gitee.com/team/%2e%2e/repo' }, code: 'repository-evidence/url-invalid' },
-    { repository: { url: 'https://gitee.com/team%2Frepo' }, code: 'repository-evidence/url-invalid' },
-    { repository: { url: 'file:///tmp/repo', link_mode: 'local-only' }, code: 'repository-evidence/url-invalid' },
-    { repository: { url: 'javascript:alert(1)', link_mode: 'local-only' }, code: 'repository-evidence/url-invalid' },
-    { repository: { link_mode: 'local-only' }, code: 'schema/required' },
+  for (const repository of [
+    { url: 'https://git.internal/team/repo' },
+    { url: 'https://gitee.com/team/repo', provider: 'github' },
+    { url: 'https://git.internal/team/repo', provider: 'gitee' },
+    { url: 'https://user:SYNTHETIC_TOKEN@gitee.com/team/repo' },
+    { url: 'https://gitee.com/team/repo?token=SYNTHETIC_TOKEN' },
+    { url: 'https://gitee.com/team/repo#SYNTHETIC_TOKEN' },
+    { url: 'https://gitee.com/team/%2e%2e/repo' },
+    { url: 'https://gitee.com/team%2Frepo' },
+    { url: 'file:///tmp/repo', link_mode: 'local-only' },
+    { url: 'javascript:alert(1)', link_mode: 'local-only' },
+    { link_mode: 'local-only' },
   ]) {
     data.diagram.meta.repository = { revision: data.revision, ...repository };
     fs.writeFileSync(data.input, JSON.stringify(data.diagram));
     const result = run(['validate', 'architecture', data.input, '--repo-root', data.root, '--json']);
     assert.equal(result.status, 1, JSON.stringify(repository));
-    assert.ok(JSON.parse(result.stdout).diagnostics.some((entry) => entry.code === code), `${JSON.stringify(repository)}: ${result.stdout}`);
     assert.doesNotMatch(result.stdout + result.stderr, /SYNTHETIC_TOKEN/);
   }
 });
