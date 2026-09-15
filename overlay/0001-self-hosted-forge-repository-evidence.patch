@@ -200,16 +200,17 @@ diff --git a/archify/test/repository-evidence.test.mjs b/archify/test/repository
 index 0d548de..d55e9a7 100644
 --- a/archify/test/repository-evidence.test.mjs
 +++ b/archify/test/repository-evidence.test.mjs
-@@ -76,6 +76,119 @@ test('Gitee evidence generates provider-specific revision and line links', () =>
+@@ -76,6 +76,120 @@ test('Gitee evidence generates provider-specific revision and line links', () =>
    }
  });
  
 +// Fork-restoration record for the upstream/main sync (fork main 1f1323e x upstream 50e2dcc).
++// Line numbers below are anchored to the tree after the later upstream/main merge (30fd463).
 +// The five fork-only commits dropped by that merge were re-applied onto upstream's rewrite:
 +//   c3649a9 version fast-path / content-first home / fail-loud unknown command
-+//     preserved: archify/bin/archify.mjs:15,24,2060,2069,2125
++//     preserved: archify/bin/archify.mjs:15,24,2085,2094,2150
 +//   b87c0b4 TOON output for validate/deliver/compare/migrate/doctor/demo
-+//     preserved: archify/bin/archify.mjs:739,1203,1300,1438,1447,1586,1892,2046
++//     preserved: archify/bin/archify.mjs:764,1228,1325,1463,1472,1611,1917,2071
 +//   530ce3c zh-CN authoring default, preserved: archify/SKILL.md:83
 +//   767f51b arbitrary git hosts for repository evidence
 +//     host-agnostic parse: archify/renderers/shared/repository-location.mjs:28
