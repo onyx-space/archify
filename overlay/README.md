@@ -48,11 +48,13 @@ pass drops one as "unused".
   overlay-form deviation: this fork does not re-sign upstream's release
   artifact, and rebuilding needs Node 22 (`scripts/build-zip.sh` rejects every
   other Node major because the ZIP bytes are toolchain-bound). Concrete check,
-  no Node 22 needed — the committed archive still embeds the pre-patch file:
+  no Node 22 needed — with the overlay applied (`bash overlay/apply.sh`) the
+  archive entry still holds upstream's pre-patch bytes while the working file
+  holds the patched ones:
 
   ```sh
   unzip -p archify.zip archify/renderers/shared/repository-location.mjs | shasum -a 256
-  # e82fa68ab46e71566eb7aefdb48f6df67b34fd27ce36489e7787410dbfba05ce (unpatched)
+  # e82fa68ab46e71566eb7aefdb48f6df67b34fd27ce36489e7787410dbfba05ce (unpatched; unchanged by the overlay)
   shasum -a 256 archify/renderers/shared/repository-location.mjs
   # 120c92f4c45edc2217509463df773b9d97b5e5f4aa39c8cba8b7d59a72c01659 (patched)
   ```
