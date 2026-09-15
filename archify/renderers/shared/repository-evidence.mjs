@@ -94,7 +94,7 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
   if (!location) {
     evidenceFailure('repository-evidence/url-invalid', '/meta/repository/url must be a credential-free HTTP(S) or Git SSH repository address without query, fragment, or dot segments.', {
       subject: { path: '/meta/repository/url' },
-      supportedFixes: ['declare the matching repository address without credentials; use link_mode: local-only for internal repositories'],
+      supportedFixes: ['declare the matching credential-free repository address; internal HTTP(S) forges can use link_mode: web, and local-only still validates the same address'],
     });
   }
   const linkMode = repository.link_mode ?? 'web';
