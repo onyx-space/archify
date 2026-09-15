@@ -88,17 +88,17 @@ test('cli: help lists commands and diagram types', () => {
 test('cli: doctor reports a complete installation is ready', () => {
   const result = run(['doctor']);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /\s+ok,Node\.js v\d+/);
-  assert.match(result.stdout, /\s+ok,Core template/);
-  assert.match(result.stdout, /\s+ok,Example renderer/);
-  assert.match(result.stdout, /\s+ok,Live preview runtime/);
-  assert.match(result.stdout, /\s+ok,Scenario recipe guide/);
-  assert.match(result.stdout, /\s+ok,Progressive authoring references/);
-  assert.match(result.stdout, /\s+ok,Architecture compare runtime and proof fixtures/);
-  assert.match(result.stdout, /\s+ok,Standalone schema validators/);
-  assert.match(result.stdout, /\s+ok,architecture renderer, schema, and example/);
-  assert.match(result.stdout, /\s+ok,lifecycle renderer, schema, and example/);
-  assert.match(result.stdout, /status: ready/);
+  assert.match(result.stdout, /\[ok\] Node\.js v\d+/);
+  assert.match(result.stdout, /\[ok\] Core template/);
+  assert.match(result.stdout, /\[ok\] Example renderer/);
+  assert.match(result.stdout, /\[ok\] Live preview runtime/);
+  assert.match(result.stdout, /\[ok\] Scenario recipe guide/);
+  assert.match(result.stdout, /\[ok\] Progressive authoring references/);
+  assert.match(result.stdout, /\[ok\] Architecture compare runtime and proof fixtures/);
+  assert.match(result.stdout, /\[ok\] Standalone schema validators/);
+  assert.match(result.stdout, /\[ok\] architecture renderer, schema, and example/);
+  assert.match(result.stdout, /\[ok\] lifecycle renderer, schema, and example/);
+  assert.match(result.stdout, /Archify is ready\./);
 });
 
 test('cli: doctor identifies an incomplete installation', () => {
@@ -113,9 +113,9 @@ test('cli: doctor identifies an incomplete installation', () => {
   });
 
   assert.equal(result.status, 1);
-  assert.match(result.stdout, /\s+missing,Core template/);
-  assert.match(result.stdout, /\s+missing,Scenario recipe guide/);
-  assert.match(result.stdout, /\s+missing,workflow renderer, schema, and example/);
+  assert.match(result.stdout, /\[missing\] Core template/);
+  assert.match(result.stdout, /\[missing\] Scenario recipe guide/);
+  assert.match(result.stdout, /\[missing\] workflow renderer, schema, and example/);
   assert.match(result.stderr, /Archify is not ready: \d+ required files? missing\./);
 });
 
@@ -130,7 +130,7 @@ test('cli: doctor rejects a corrupt standalone validator', () => {
   });
 
   assert.equal(result.status, 1);
-  assert.match(result.stdout, /\s+invalid,Standalone schema validators/);
+  assert.match(result.stdout, /\[invalid\] Standalone schema validators/);
   assert.match(result.stderr, /Archify is not ready: 1 runtime check failed\./);
 });
 
@@ -152,6 +152,18 @@ test('cli: examples renders from an installed skill', () => {
     'web-app-rendered.html',
   ]) {
     assert.equal(fs.existsSync(path.join(installedRoot, 'examples', output)), true, output);
+  }
+});
+
+test('cli: argument-free commands reject trailing arguments', () => {
+  for (const command of ['examples', 'doctor']) {
+    const extra = run([command, 'ignored-extra']);
+    assert.equal(extra.status, 2, command);
+    assert.match(extra.stderr, /Usage:/, command);
+
+    const unknown = run([command, '--bogus']);
+    assert.equal(unknown.status, 2, command);
+    assert.match(unknown.stderr, new RegExp(`Unknown ${command} option "--bogus"`), command);
   }
 });
 
@@ -209,8 +221,8 @@ test('cli: demo creates a ready-to-open diagram in a chosen directory', () => {
   assert.equal(result.status, 0, result.stderr);
   assert.equal(fs.existsSync(output), true);
   assert.match(fs.readFileSync(output, 'utf8'), /Sample Web App Diagram/);
-  assert.match(result.stdout, new RegExp(`output: ${output.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
-  assert.match(result.stdout, /next: open the HTML in a browser/);
+  assert.match(result.stdout, new RegExp(`Demo ready: ${output.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+  assert.match(result.stdout, /Next: open the HTML in your browser/);
   assert.match(result.stdout, /archify render architecture/);
 });
 
@@ -221,6 +233,17 @@ test('cli: demo defaults to the current directory', () => {
 
   assert.equal(result.status, 0, result.stderr);
   assert.equal(fs.existsSync(path.join(workingDirectory, 'archify-demo.html')), true);
+});
+
+test('cli: demo rejects a mistyped option without creating an output directory', () => {
+  const workingDirectory = path.join(tmp, 'demo-option-guard');
+  fs.mkdirSync(workingDirectory);
+
+  const result = run(['demo', '--typo'], { cwd: workingDirectory });
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /Unknown demo option "--typo"/);
+  assert.deepEqual(fs.readdirSync(workingDirectory), []);
 });
 
 test('cli: render writes a diagram html file', () => {
@@ -620,6 +643,20 @@ test('cli: check validates rendered html', () => {
   const result = run(['check', out]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /"ok": true/);
+});
+
+test('cli: check rejects unknown options and extra positionals', () => {
+  const out = path.join(tmp, 'workflow-check-args.html');
+  const input = path.join(skillRoot, 'examples/agent-tool-call.workflow.json');
+  assert.equal(run(['render', 'workflow', input, out]).status, 0);
+
+  const unknown = run(['check', '--json', out]);
+  assert.equal(unknown.status, 2);
+  assert.match(unknown.stderr, /Unknown check option "--json"/);
+
+  const extra = run(['check', out, 'ignored-extra']);
+  assert.equal(extra.status, 2);
+  assert.match(extra.stderr, /Usage:/);
 });
 
 test('cli: validate emits structured json without keeping html output', () => {
