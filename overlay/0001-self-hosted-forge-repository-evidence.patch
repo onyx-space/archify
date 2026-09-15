@@ -207,7 +207,7 @@ index 0d548de..d55e9a7 100644
 +// Fork-restoration record for the upstream/main sync (fork main 1f1323e x upstream 50e2dcc).
 +// The five fork-only commits dropped by that merge were re-applied onto upstream's rewrite:
 +//   c3649a9 version fast-path / content-first home / fail-loud unknown command
-+//     preserved: archify/bin/archify.mjs:15,24,2059,2068,2122
++//     preserved: archify/bin/archify.mjs:15,24,2060,2069,2125
 +//   b87c0b4 TOON output for validate/deliver/compare/migrate/doctor/demo
 +//     preserved: archify/bin/archify.mjs:739,1203,1300,1438,1447,1586,1892,2046
 +//   530ce3c zh-CN authoring default, preserved: archify/SKILL.md:83
@@ -258,9 +258,9 @@ index 0d548de..d55e9a7 100644
 +//     upstream: /\[missing\] Output path safety runtime/ -> fork: /missing,Output path safety runtime/
 +//       (same restored doctor TOON output).
 +//   cursor-onboarding.test.mjs 'the zero-dependency archive works from the canonical Cursor-visible agent path'
-+//     upstream: the packaged archive's `doctor` output must match /Archify is ready\./.
-+//     fork: /status: ready/ (same restored TOON doctor output); the assertion reads the packaged
-+//       archify.zip, so it only failed once ca71c6b rebuilt that archive with the restored CLI.
++//     NOT touched by these overlay patches: a patched tree keeps upstream's /Archify is ready\./
++//     assertion, because its packaged archify.zip is upstream's too. The assertion only needs
++//     /status: ready/ after a manual scripts/build-zip.sh rebuild, as overlay/README.md documents.
 +// Fix rounds: 391e908 host-agnostic parse + self-hosted links, 4190127 http for self-hosted /
 +// https for public forges, 08e6a48 exact diagnostic codes, b98f1c8 .git+case normalization and
 +// the two assertion changes above, d294ff8 .git stripped in identity and emitted links, fd78d99
