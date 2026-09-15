@@ -41,8 +41,17 @@ bash overlay/apply.sh                          # re-apply the local capabilities
 ## Verification
 
 `overlay/apply.sh` was verified by applying it to a clean `upstream/main`
-checkout and running the repository-evidence tests, and by the counter-check
-that the same self-hosted-forge assertion fails when the overlay is not applied.
+checkout and running the repository-evidence tests. The counter-check keeps the
+overlay's test file and reverts only the two implementation files the patch
+changes, then reruns those tests:
+
+```sh
+bash overlay/apply.sh
+git checkout upstream/main -- archify/renderers/shared/repository-location.mjs \
+  archify/renderers/shared/repository-evidence.mjs
+node --test archify/test/repository-evidence.test.mjs   # self-hosted-forge test fails
+```
+
 Commands, raw output and the real internal-Gitea end-to-end run are recorded in
 the fork-sync report (`data/fork-sync-conflict-archify/report.md` in the
 `firstmate` home).
