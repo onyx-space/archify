@@ -1,8 +1,8 @@
 diff --git a/archify/bin/archify.mjs b/archify/bin/archify.mjs
-index 07ad91b..d0608ab 100755
+index 07ad91b..a642fb3 100755
 --- a/archify/bin/archify.mjs
 +++ b/archify/bin/archify.mjs
-@@ -12,6 +12,30 @@ const skillRoot = path.resolve(__dirname, '..');
+@@ -12,6 +12,32 @@ const skillRoot = path.resolve(__dirname, '..');
  
  const TYPES = new Set(['architecture', 'workflow', 'sequence', 'dataflow', 'lifecycle']);
  
@@ -15,9 +15,11 @@ index 07ad91b..d0608ab 100755
 +  }
 +}
 +
++// The home view lists exactly five rows; the TOON header count is this fork's
++// real entry count and must match them.
 +const HOME_VIEW = `Create self-contained, interactive HTML diagrams from typed JSON specs.
 +
-+archify[16]{type,command,description}:
++archify[5]{type,command,description}:
 +  architecture,render,"render a component/service infrastructure map"
 +  workflow,render,"process, approval gate, runbook, CI/CD"
 +  sequence,render,"API call chain, request lifecycle, async trace"
@@ -33,7 +35,7 @@ index 07ad91b..d0608ab 100755
  function usage() {
    return `Usage:
    archify render <type> <input.json> [output.html] [--quality standard|showcase] [--repo-root path (architecture only)]
-@@ -737,9 +761,7 @@ async function commandCompare(args) {
+@@ -737,9 +763,7 @@ async function commandCompare(args) {
      commitComparePair({ htmlCandidate, receiptCandidate, outputPath, receiptPath, stagingDirectory });
      if (options.json) console.log(JSON.stringify(finalReceipt, null, 2));
      else {
@@ -44,7 +46,7 @@ index 07ad91b..d0608ab 100755
      }
    } catch (error) {
      if (error instanceof ArchitectureDeltaError) {
-@@ -1200,12 +1222,11 @@ async function commandDeliver(args) {
+@@ -1200,12 +1224,11 @@ async function commandDeliver(args) {
      if (json) {
        console.log(JSON.stringify(receipt, null, 2));
      } else {
@@ -60,7 +62,7 @@ index 07ad91b..d0608ab 100755
      }
    } finally {
      try {
-@@ -1300,7 +1321,8 @@ async function commandVisualCheck(args) {
+@@ -1300,7 +1323,8 @@ async function commandVisualCheck(args) {
      console.log(JSON.stringify(result.receipt, null, 2));
    } else {
      console.log(`automated browser evidence ${result.receipt.status}: ${result.receipt.artifact.path}`);
@@ -70,7 +72,7 @@ index 07ad91b..d0608ab 100755
      console.log(`receipt ${path.join(path.dirname(result.receipt.artifact.path), result.receipt.sidecars.receipt)}`);
      if (result.receipt.captures.contactSheet) {
        console.log(`contact sheet ${path.join(path.dirname(result.receipt.artifact.path), result.receipt.captures.contactSheet)}`);
-@@ -1438,16 +1460,16 @@ async function commandDoctor(args) {
+@@ -1438,16 +1462,16 @@ async function commandDoctor(args) {
      });
    }
  
@@ -90,7 +92,7 @@ index 07ad91b..d0608ab 100755
      return;
    }
  
-@@ -1586,9 +1608,8 @@ function commandDemo(args) {
+@@ -1586,9 +1610,8 @@ function commandDemo(args) {
    const result = runNode([rendererPath('architecture'), input, output]);
    if (result.status !== 0) exitFrom(result);
  
@@ -102,7 +104,7 @@ index 07ad91b..d0608ab 100755
  }
  
  function migrationPathDiagnostics(error, sourcePath, destinationPath) {
-@@ -1893,9 +1914,9 @@ async function commandMigrate(args) {
+@@ -1893,9 +1916,9 @@ async function commandMigrate(args) {
      });
      if (options.json) console.log(JSON.stringify(report, null, 2));
      else if (sourceDocument.schema_version === 1) {
@@ -114,7 +116,7 @@ index 07ad91b..d0608ab 100755
      }
    } catch (error) {
      const migrationDiagnostics = Array.isArray(error?.archifyDiagnostics)
-@@ -2045,9 +2066,9 @@ function commandValidate(args) {
+@@ -2045,9 +2068,9 @@ function commandValidate(args) {
            }, null, 2));
          } else {
            const engineering = engineeringProfile
@@ -126,7 +128,7 @@ index 07ad91b..d0608ab 100755
          }
        }
      }
-@@ -2060,9 +2081,18 @@ function commandValidate(args) {
+@@ -2060,9 +2083,18 @@ function commandValidate(args) {
  
  const [command, ...args] = process.argv.slice(2);
  
@@ -145,7 +147,7 @@ index 07ad91b..d0608ab 100755
      case '-h':
      case '--help':
      case 'help':
-@@ -2114,7 +2144,10 @@ try {
+@@ -2114,7 +2146,10 @@ try {
        commandDemo(args);
        break;
      default:
@@ -158,10 +160,26 @@ index 07ad91b..d0608ab 100755
  } catch (error) {
    if (!error.archifyArgument) throw error;
 diff --git a/archify/test/cli.test.mjs b/archify/test/cli.test.mjs
-index de2fd91..9a97f74 100644
+index de2fd91..2b6d4e6 100644
 --- a/archify/test/cli.test.mjs
 +++ b/archify/test/cli.test.mjs
-@@ -88,17 +88,17 @@ test('cli: help lists commands and diagram types', () => {
+@@ -85,20 +85,33 @@ test('cli: help lists commands and diagram types', () => {
+   assert.match(result.stdout, /architecture, workflow, sequence, dataflow, lifecycle/);
+ });
+ 
++test('cli: home view TOON header declares the rows it emits', () => {
++  const result = run([]);
++  assert.equal(result.status, 0, result.stderr);
++  const lines = result.stdout.split('\n');
++  const header = lines.find((line) => /^archify\[\d+\]\{type,command,description\}:$/.test(line));
++  assert.ok(header, result.stdout);
++  const declared = Number(header.match(/^archify\[(\d+)\]/)[1]);
++  const start = lines.indexOf(header) + 1;
++  let rows = 0;
++  while (lines[start + rows]?.startsWith('  ') && lines[start + rows].trim() !== '') rows += 1;
++  assert.equal(rows, declared, `TOON header declares ${declared} rows but the view emitted ${rows}:\n${result.stdout}`);
++});
++
  test('cli: doctor reports a complete installation is ready', () => {
    const result = run(['doctor']);
    assert.equal(result.status, 0, result.stderr);
@@ -190,7 +208,7 @@ index de2fd91..9a97f74 100644
  });
  
  test('cli: doctor identifies an incomplete installation', () => {
-@@ -113,9 +113,9 @@ test('cli: doctor identifies an incomplete installation', () => {
+@@ -113,9 +126,9 @@ test('cli: doctor identifies an incomplete installation', () => {
    });
  
    assert.equal(result.status, 1);
@@ -203,7 +221,7 @@ index de2fd91..9a97f74 100644
    assert.match(result.stderr, /Archify is not ready: \d+ required files? missing\./);
  });
  
-@@ -130,7 +130,7 @@ test('cli: doctor rejects a corrupt standalone validator', () => {
+@@ -130,7 +143,7 @@ test('cli: doctor rejects a corrupt standalone validator', () => {
    });
  
    assert.equal(result.status, 1);
@@ -212,7 +230,7 @@ index de2fd91..9a97f74 100644
    assert.match(result.stderr, /Archify is not ready: 1 runtime check failed\./);
  });
  
-@@ -221,8 +221,8 @@ test('cli: demo creates a ready-to-open diagram in a chosen directory', () => {
+@@ -221,8 +234,8 @@ test('cli: demo creates a ready-to-open diagram in a chosen directory', () => {
    assert.equal(result.status, 0, result.stderr);
    assert.equal(fs.existsSync(output), true);
    assert.match(fs.readFileSync(output, 'utf8'), /Sample Web App Diagram/);

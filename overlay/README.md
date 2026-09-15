@@ -34,6 +34,26 @@ pass drops one as "unused".
 
 `apply.sh` applies the patches in filename order and rolls back on failure.
 
+### Capability ④ retention history
+
+Capability ④ shipped, was briefly removed, and was restored by an explicit
+authority decision. That history is recorded here so a later sync or review does
+not read the removal commit as current policy:
+
+1. **Removed.** A review round of the plan-D branch logged
+   `overlay-0002-0003-exceed-intent-capability-list` and its fix, commit
+   `c3bfcd2`, deleted `0002-axi-toon-cli-output.patch` and
+   `0003-skill-default-zh-cn-authoring.patch` as "out of scope". That round
+   worked from an incomplete enumeration of the fork's local capabilities.
+2. **Restored.** Commit `36bbb06` (2026-09-15) brought both patches back,
+   re-added their rows to the in-tree restore record, and turned this inventory
+   into the four registered groups above.
+3. **Authority.** Plan D's goal is to keep this fork's own capabilities in the
+   overlay layer; capability ④ is one of the four, and the authoritative
+   enumeration names `c3649a9` / `b87c0b4` (AXI/TOON output) and `530ce3c`
+   (zh-CN authoring). The deletion was a mis-scoped simplification, not a
+   capability decision, so the restore supersedes it.
+
 ## What applying the overlay does *not* do
 
 * **`archify.zip` is not patched, and the canonical-archive gate cannot pass on
@@ -105,7 +125,9 @@ changes the expected outcome. Each entry is upstream → overlay → reason.
   `Archify is ready.`, `Demo ready: <path>`, `Next: open the HTML in your
   browser`; the overlay matches `ok,<label>` / `missing,<label>` /
   `invalid,<label>` / `status: ready`, `output: <path>`, `next: open the HTML in
-  a browser` — the restored TOON output (fork `b87c0b4`).
+  a browser` — the restored TOON output (fork `b87c0b4`). It also adds `cli:
+  home view TOON header declares the rows it emits`, which runs the no-args CLI
+  and asserts the TOON header count equals the rows actually emitted.
 * `archify/test/output-path.test.mjs`, `doctor reports a missing output-path
   safety runtime in an installed skill`: upstream matched `[missing] Output path
   safety runtime`; the overlay matches `missing,Output path safety runtime`
@@ -136,7 +158,7 @@ node --test archify/test/repository-evidence.test.mjs \
   archify/test/architecture-delta.test.mjs \
   archify/test/cli.test.mjs \
   archify/test/output-path.test.mjs
-# tests 118 | pass 117 | fail 0 | skipped 1
+# tests 119 | pass 118 | fail 0 | skipped 1
 ```
 
 The rest of the suite is not run here: `release-package-gates.test.mjs`'s
