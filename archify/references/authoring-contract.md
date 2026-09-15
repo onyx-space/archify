@@ -239,9 +239,9 @@ path must match. For example, `git@host:Team/repo` differs from
 paths preserve literal percent escapes, while URI paths decode them. SSH host
 aliases and forge-specific browse/clone prefixes are not guessed.
 Web links assume a forge browse shape like GitHub's
-`/blob/<revision>/<path>#L<start>-L<end>` and are never checked against the
-remote. Use `local-only` for SSH addresses, nested namespaces, and any forge
-whose link shape differs.
+`/blob/<revision>/<path>#L<start>-L<end>` (Gitee uses `#L<start>-<end>`) and are
+never checked against the remote. Use `local-only` for SSH addresses, nested
+namespaces, and any forge whose link shape differs.
 
 ## Hand-placed fallback
 
