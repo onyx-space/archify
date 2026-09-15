@@ -129,6 +129,10 @@ test('Gitee evidence generates provider-specific revision and line links', () =>
 //   output-path.test.mjs 'doctor reports a missing output-path safety runtime ...'
 //     upstream: /\[missing\] Output path safety runtime/ -> fork: /missing,Output path safety runtime/
 //       (same restored doctor TOON output).
+//   cursor-onboarding.test.mjs 'the zero-dependency archive works from the canonical Cursor-visible agent path'
+//     upstream: the packaged archive's `doctor` output must match /Archify is ready\./.
+//     fork: /status: ready/ (same restored TOON doctor output); the assertion reads the packaged
+//       archify.zip, so it only failed once ca71c6b rebuilt that archive with the restored CLI.
 // Fix rounds: 391e908 host-agnostic parse + self-hosted links, 4190127 http for self-hosted /
 // https for public forges, 08e6a48 exact diagnostic codes, b98f1c8 .git+case normalization and
 // the two assertion changes above, d294ff8 .git stripped in identity and emitted links, fd78d99
