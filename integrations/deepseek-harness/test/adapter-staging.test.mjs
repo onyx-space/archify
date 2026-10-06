@@ -31,8 +31,21 @@ function fixture() {
     encoding: 'utf8',
   });
   assert.equal(clone.status, 0, clone.stderr || clone.stdout);
+  // The fixture commits into this clone; without this, git can detach a background
+  // maintenance run (gc / commit-graph write) that keeps writing into .git after the
+  // command returns and races the teardown below.
+  git(checkout, ['config', 'maintenance.auto', 'false']);
+  git(checkout, ['config', 'gc.auto', '0']);
+  git(checkout, ['config', 'fetch.writeCommitGraph', 'false']);
   git(checkout, ['checkout', '--detach', head]);
   return { root, checkout, head };
+}
+
+function cleanup(root) {
+  // Git may still be finishing a background write (e.g. objects/info/commit-graphs) when
+  // the fixture is removed. fs.rmSync retries ENOTEMPTY/EBUSY/EPERM when maxRetries is set,
+  // so back off and retry instead of failing the test on a teardown race.
+  fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 }
 
 function adapterPath(checkout, relative) {
@@ -115,7 +128,7 @@ test('pack stages adapter inputs from the fixture HEAD despite dirty and untrack
       + fs.readFileSync(path.join(packageRoot, 'lib', 'index.js'), 'utf8');
     assert.equal(packedText.includes(dirtyMarker), false);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    cleanup(root);
   }
 });
 
@@ -147,7 +160,7 @@ test('pack does not follow a live symlink replacing the tracked adapter main', (
     assert.deepEqual(fs.readFileSync(packedMain), headBlob(checkout, head, 'lib/index.js'));
     assert.doesNotMatch(fs.readFileSync(packedMain, 'utf8'), new RegExp(marker));
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    cleanup(root);
   }
 });
 
@@ -166,7 +179,7 @@ test('pack rejects a committed adapter symlink and leaves no target tarball', ()
     assert.match(`${result.stderr}\n${result.stdout}`, /symlink/i);
     assert.equal(fs.existsSync(out), false);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    cleanup(root);
   }
 });
 
@@ -181,7 +194,7 @@ test('pack rejects a missing required adapter main and leaves no target tarball'
     assert.match(`${result.stderr}\n${result.stdout}`, /lib[\\/]index\.js|main|required/i);
     assert.equal(fs.existsSync(out), false);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    cleanup(root);
   }
 });
 
@@ -202,7 +215,7 @@ test('pack rejects a committed reserved device-name path and leaves no target ta
     assert.match(`${result.stderr}\n${result.stdout}`, /unsupported path|NUL\.js/i);
     assert.equal(fs.existsSync(out), false);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    cleanup(root);
   }
 });
 
@@ -221,6 +234,6 @@ test('pack rejects committed adapter paths that collide by case and leaves no ta
     assert.match(`${result.stderr}\n${result.stdout}`, /collide across supported filesystems|INDEX\.js|index\.js/i);
     assert.equal(fs.existsSync(out), false);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    cleanup(root);
   }
 });
